@@ -4,122 +4,123 @@
 
 # WiniOS Studio
 
-**Tus apps SwiftUI compiladas, instaladas y verificadas en tu iPhone — desde Windows, sin Mac.**
+**Your SwiftUI apps — built, signed, installed and verified on your iPhone. From Windows. No Mac needed.**
 
 [![CI · Windows build](https://github.com/AQuirozAI/winios.studio/actions/workflows/ci.yml/badge.svg)](https://github.com/AQuirozAI/winios.studio/actions/workflows/ci.yml)
-[![Instalador](https://img.shields.io/badge/instalador-v0.1.0-blue)](https://github.com/AQuirozAI/winios.studio/releases)
-[![Licencia](https://img.shields.io/badge/licencia-Apache--2.0-green)](LICENSE)
-[![Plataforma](https://img.shields.io/badge/plataforma-Windows%2010%20%7C%2011-blue)](#requisitos)
-[![Motor](https://img.shields.io/badge/motor-xtool-232323)](https://github.com/xtool-org/xtool)
+[![Release](https://img.shields.io/github/v/release/AQuirozAI/winios.studio?include_prereleases)](https://github.com/AQuirozAI/winios.studio/releases)
+[![License](https://img.shields.io/badge/licencia-Apache--2.0-green)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-blue)](#requirements)
+[![Engine](https://img.shields.io/badge/engine-xtool-232323)](https://github.com/xtool-org/xtool)
 [![GUI](https://img.shields.io/badge/Tauri-2-24C6D5)](https://v2.tauri.app)
-[![PRs bienvenidos](https://img.shields.io/badge/PRs-bienvenidos-brightgreen)](CONTRIBUTING.md)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)](CONTRIBUTING.md)
+
+English · [Español](README.es.md)
 
 > [!WARNING]
-> **Pre-release temprano.** El ciclo completo está probado en un equipo (Windows 11 + WSL2 + iPhone con iOS 27). Consulta los [límites](#preguntas-frecuentes) antes de instalar.
+> **Early pre-release.** The full cycle is proven on one machine (Windows 11 + WSL2 + iPhone on iOS 27). See the [FAQ](#faq) before installing.
 
 </div>
 
-<!-- TODO(lanzamiento): 2–3 screenshots reales (asistente de un clic · fases del pipeline · app en el iPhone) -->
+<!-- TODO(launch): 2–3 real screenshots (one-click setup · pipeline phases · app on iPhone) -->
 
-WiniOS Studio es un estudio de escritorio para desarrollo **iOS nativo** en Windows. Un asistente de un clic configura todo lo que normalmente requiere una Mac — el toolchain Swift, la firma y el dispositivo — y un pipeline integrado compila, firma, instala y **verifica** tu app en tu iPhone con evidencia en cada fase.
+WiniOS Studio is a desktop studio for **native iOS development on Windows**. A one-click assistant sets up everything that normally requires a Mac — the Swift toolchain, signing, and the phone — and an integrated pipeline builds, signs, installs and **verifies** your app on your iPhone, with evidence at every phase.
 
-Bajo el capó usa [xtool](https://github.com/xtool-org/xtool) (MIT) sobre una distribución WSL aislada dedicada a la app: sin tocar tus otras instalaciones, sin backend, y con tus credenciales solo en tu equipo.
+Under the hood it uses [xtool](https://github.com/xtool-org/xtool) (MIT) inside a dedicated, app-owned WSL distribution: your other installs are untouched, there is no backend, and your credentials never leave your machine.
 
-## Características
+## Features
 
-- 🧙 **Asistente de un clic** — prepara WSL, Swift, xtool, SDK, Apple ID y el puente del iPhone; idempotente y reparable
-- 🧱 **Proyectos SwiftUI + SwiftPM** — plantilla con `Package.swift`, `xtool.yml` y `git init` lista para construir
-- 🚀 **«Ejecutar en mi iPhone»** — un pipeline visible: *compilar → firmar → empaquetar → conectar → instalar → verificar*
-- 🔎 **Estados que no mienten** — *instalada ≠ abierta*; errores explicados con la acción siguiente (2FA, certificados, cable, SDK)
-- 🖥️ **Abrir en VS Code** — servidor remoto en la distro con la extensión oficial de Swift y SourceKit-LSP listos
-- 🌐 **Interfaz EN/ES**
+- 🧙 **One-click setup** — prepares WSL, Swift, xtool, SDK, Apple ID and the iPhone bridge; idempotent and self-repairing
+- 🧱 **SwiftUI + SwiftPM projects** — template with `Package.swift`, `xtool.yml` and a `git init` commit, ready to build
+- 🚀 **“Run on my iPhone”** — a visible pipeline: *build → sign → package → connect → install → verify*
+- 🔎 **States that don't lie** — *installed ≠ opened*; every error explained with its next action (2FA, certificates, cable, SDK)
+- 🖥️ **Open in VS Code** — remote server in the distro with the official Swift extension and SourceKit-LSP ready
+- 🌐 **EN/ES interface**
 
-## Requisitos
+## Requirements
 
 | | |
 | --- | --- |
-| 💻 Windows 10/11 (x64) | permisos de administrador una sola vez |
-| 🍎 Apple ID | gratuita sirve para instalar y probar en tu iPhone |
-| 📦 Xcode 27 `.xip` | se pide una vez en la app (Apple exige que lo descargues con tu cuenta) |
-| 📱 iPhone + cable | desbloqueado, con *Confiar en este equipo* y **Modo Desarrollador** |
+| 💻 Windows 10/11 (x64) | administrator rights once (UAC) |
+| 🍎 Apple ID | a free account works for building and testing on your own iPhone |
+| 📦 Xcode 27 `.xip` | requested once inside the app (Apple requires downloading it with your account) |
+| 📱 iPhone + USB cable | unlocked, with *Trust this Computer* and **Developer Mode** enabled |
 
-## Instalación
+## Install
 
-Descarga el instalador de la última [release](https://github.com/AQuirozAI/winios.studio/releases) y ejecútalo:
+Download the installer from the latest [Release](https://github.com/AQuirozAI/winios.studio/releases) and run it:
 
-1. El asistente configura el entorno completo (acepta los permisos que Windows pida)
-2. Arrastra tu `Xcode.xip` cuando te lo pida e inicia sesión con tu Apple ID
-3. Conecta tu iPhone y pulsa **Ejecutar en mi iPhone**
+1. The assistant sets up the whole environment (accept the permissions Windows asks for)
+2. Drag in your `Xcode.xip` when prompted and sign in with your Apple ID
+3. Connect your iPhone and press **Run on my iPhone**
 
-### Desde el código fuente
+### From source
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\build-windows.ps1
 ```
 
-### Solo CLI
+### CLI-only
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\install-windows.ps1
 ```
 
 ```bash
-./scripts/winiz.sh status          # estado del entorno y del iPhone
-./scripts/winiz.sh new MiApp       # crea un proyecto SwiftUI
-./scripts/winiz.sh run MiApp       # compila + firma + instala en el iPhone
+./scripts/winiz.sh status          # environment + iPhone status
+./scripts/winiz.sh new MyApp       # create a SwiftUI project
+./scripts/winiz.sh run MyApp       # build + sign + install on the iPhone
 ```
 
-## Preguntas frecuentes
+## FAQ
 
-**¿Necesito la cuenta de $99/año de Apple?**
-No para desarrollar y probar en tu iPhone: con un Apple ID gratuito basta. Con perfiles gratuitos la firma expira a los 7 días y hay un límite de 2 certificados de desarrollo (la app responde la revocación del certificado viejo por ti). Sí necesitas el programa pago para publicar en la App Store — fuera del alcance de la v1.
+**Do I need Apple's $99/year developer account?**
+No — a **free Apple ID** is enough to build and run on *your own iPhone*. Free accounts have a 7-day provisioning expiry and a 2-certificate limit (both Apple rules; the app answers the certificate-revocation prompt for you). The paid program is required for the App Store, which is out of scope for v1.
 
-**¿Es legal sin Mac?**
-El acuerdo de licencia de los SDK de Apple prohíbe instalarlos en hardware no-Apple. WiniOS no redistribuye nada de Apple: tú descargas tu `Xcode.xip` con tu propia cuenta y firmas con tu Apple ID — el mismo enfoque de xtool. Úsalo con tu cuenta bajo tu propio riesgo; tenlo en cuenta si usas una Apple ID de empresa. *(«Apple», «iPhone», «Xcode» y «SwiftUI» son marcas de Apple Inc. — proyecto no afiliado.)*
+**Is it legal without a Mac?**
+Apple's Xcode & Apple SDKs agreement forbids installing Apple SDKs on non-Apple-branded hardware. WiniOS does not redistribute anything from Apple: you download your own `Xcode.xip` with your own account and sign with your own Apple ID — the same approach as xtool. Use it at your own risk, especially with corporate Apple IDs. *(“Apple”, “iPhone”, “Xcode” and “SwiftUI” are trademarks of Apple Inc. This project is not affiliated with or endorsed by Apple.)*
 
-**¿Funciona con proyectos Xcode existentes (`.xcodeproj`)?**
-Aún no — los proyectos se crean con la plantilla SwiftPM/SwiftUI del motor. La importación está en la hoja de ruta.
+**Does it work with existing Xcode projects (`.xcodeproj`)?**
+Not yet — projects are created with the engine's SwiftPM/SwiftUI template. Import is on the roadmap.
 
-**¿Hay simulador o hot reload?**
-No. El simulador y las Previews de SwiftUI corren solo en macOS. El ciclo aquí es: editas → ejecutas → la app se instala y verifica en tu iPhone (8.3 s el primer build, 0.8 s incremental). La apertura automática puede fallar en iOS 27; en ese caso la app te lo dice y la abres en tu teléfono.
+**Is there an iOS simulator or hot reload?**
+No. The simulator and SwiftUI previews run only on macOS. The cycle here is: edit → run → the app installs and verifies on your iPhone (8.3 s first build, 0.8 s incremental). Automatic launch may fail on iOS 27; the app tells you and you open it on the phone.
 
-**¿Puedo editar en VS Code?**
-Sí — con un clic: la app configura el servidor remoto de VS Code dentro de la distro con la extensión de Swift y el build server listos.
+**Can I edit in VS Code?**
+Yes — one click configures the VS Code remote server inside the distro, with the Swift extension and the xtool build server ready.
 
-## Arquitectura
+## Architecture
 
 ```
-Tauri 2 (motor Rust) ──scripts por stdin──▶ distro WSL aislada "WinIOS"
-                                              │  Swift · xtool · proyectos
+Tauri 2 (Rust engine) ──scripts via stdin──▶ isolated WSL distro "WinIOS"
+                                              │  Swift · xtool · projects
                                               ▼
                    Apple Mobile Device Service (Windows, tcp/27015)
-                                              │  portproxy → gateway WSL
+                                              │  portproxy → WSL NAT gateway
                                               ▼
-                                          📱 iPhone (USB, en Windows)
+                                          📱 iPhone (USB, stays on Windows)
 ```
 
-Cada operación es un comando del motor con validación: la interfaz nunca genera comandos libres, los secretos nunca salen de tu equipo y el transporte se calcula dinámicamente (el estándar `usbipd` falla la instalación con `AFCClient.Error.muxError`; resuelto con el servicio de Apple Devices + puente TCP — [detalle](docs/research/2026-10-19-transport-iphone.md)).
+Every operation is a dedicated, validated engine command: the UI never emits free-form shell commands, secrets never leave your machine, and the device transport is resolved dynamically (the standard `usbipd` path fails during *Installing* with `AFCClient.Error.muxError` — solved here with Apple's Mobile Device Service plus a TCP bridge; [how it works](docs/research/2026-10-19-transport-iphone.md)).
 
-## Hoja de ruta
+## Roadmap
 
-1. **v0.3 — IA integrada (Codex)**: pedir cambios con IA, revisar diffs y *Build & Fix*
-2. **Preview real del iPhone conectado**
-3. **Pipeline TestFlight** / distribución
-4. **Importación de `.xcodeproj`**
-5. **Windows sin WSL**
+1. **v0.3 — built-in AI (Codex)**: ask for changes, review diffs, *Build & Fix*
+2. **Real device preview** (capture the connected iPhone's screen)
+3. **TestFlight pipeline** / distribution
+4. **`.xcodeproj` import**
+5. **Windows without WSL**
 
-## Contribuir
+## Contributing
 
-Los issues concretos son la mejor entrada — antes de algo grande, abre uno y hablemos. Si tu mejora toca el *toolchain* (transporte, firma, SDK), primero valora contribuir aguas arriba a [xtool](https://github.com/xtool-org/xtool). Más detalles en [CONTRIBUTING.md](CONTRIBUTING.md).
+Concrete, reproducible issues are the best entry point — comment first for anything large. If your improvement touches the *toolchain* (transport, signing, SDK), consider contributing upstream to [xtool](https://github.com/xtool-org/xtool) first. See [CONTRIBUTING.md](CONTRIBUTING.md); security reports go to [SECURITY.md](SECURITY.md).
 
-Reportes de seguridad → [SECURITY.md](SECURITY.md).
+## Documentation
 
-## Documentación
+- [CHANGELOG.md](CHANGELOG.md) — release history
+- [Research & specs](docs/) — market research, environment findings and product design docs
+- [DESIGN.md](DESIGN.md) — UI design system
+- [README.es.md](README.es.md) — Spanish version
 
-- [CHANGELOG.md](CHANGELOG.md) — historial de versiones
-- [Investigación y especificaciones](docs/) — research de mercado, entorno y diseño del producto
-- [DESIGN.md](DESIGN.md) — sistema de diseño de la interfaz
+## License
 
-## Licencia
-
-[Apache-2.0](LICENSE) · Copyright © 2026 AQuirozAI. Este proyecto no redistribuye software de Apple; consulta el [aviso legal](#preguntas-frecuentes).
+[Apache-2.0](LICENSE) · Copyright © 2026 AQuirozAI. This project does not redistribute Apple software; see the [FAQ](#faq) for legal context.

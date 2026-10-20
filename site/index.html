@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>WiniOS Studio — iOS development on Windows, no Mac</title>
+<meta name="description" content="Build, sign, install and verify your SwiftUI apps on your iPhone from a Windows PC. One-click setup, no Mac needed. Powered by xtool." />
+<style>
+  :root {
+    --bg: #0e1116;
+    --panel: #161b22;
+    --text: #e6e9ef;
+    --muted: #9aa4b2;
+    --accent: #24c6d5;
+    --accent2: #5ea9ff;
+    --border: #232b36;
+    --ok: #3fb950;
+    --warn: #d29922;
+    --unknown: #6e7681;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 0 20px; }
+  header { padding: 64px 0 32px; text-align: center; }
+  header img { width: 96px; height: 96px; }
+  h1 { margin: 16px 0 8px; font-size: 40px; letter-spacing: -0.5px; }
+  .tagline { font-size: 20px; color: var(--text); margin: 0 0 6px; }
+  .sub { color: var(--muted); max-width: 640px; margin: 14px auto 24px; }
+  .buttons { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .btn {
+    display: inline-block; padding: 10px 22px; border-radius: 8px;
+    text-decoration: none; font-weight: 600; font-size: 15px;
+  }
+  .btn.primary { background: linear-gradient(90deg, var(--accent), var(--accent2)); color: #0b0f14; }
+  .btn.ghost { border: 1px solid var(--border); color: var(--text); }
+  .btn.ghost:hover { border-color: var(--accent); }
+  .badges { margin-top: 18px; }
+  .badges img { height: 20px; margin: 2px; }
+  section { padding: 28px 0; }
+  h2 { font-size: 22px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+  .card b { display: block; margin-bottom: 4px; }
+  .card span { color: var(--muted); font-size: 14px; }
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); font-size: 15px; }
+  th { color: var(--muted); font-weight: 600; background: #131820; }
+  tr:last-child td { border-bottom: none; }
+  .ok { color: var(--ok); font-weight: 600; }
+  .warn { color: var(--warn); font-weight: 600; }
+  .question { color: var(--unknown); font-weight: 600; }
+  .muted { color: var(--muted); }
+  footer { border-top: 1px solid var(--border); color: var(--muted); font-size: 13px; padding: 24px 0 48px; text-align: center; }
+  footer a { color: var(--accent2); text-decoration: none; }
+</style>
+</head>
+<body>
+  <header class="wrap">
+    <img src="https://raw.githubusercontent.com/AQuirozAI/winios.studio/main/app/src-tauri/icons/128x128%402x.png" alt="WiniOS Studio" />
+    <h1>WiniOS Studio</h1>
+    <p class="tagline"><b>Build, sign and run your SwiftUI apps on your iPhone — from Windows, no Mac needed.</b></p>
+    <p class="sub">A one-click assistant prepares the Swift toolchain, signing and your device. An integrated pipeline installs and verifies your app on your iPhone with evidence at every phase. Powered by <a href="https://github.com/xtool-org/xtool" style="color:var(--accent2)">xtool</a> (MIT).</p>
+    <div class="badges">
+      <img src="https://img.shields.io/github/v/release/AQuirozAI/winios.studio?include_prereleases" alt="Release" />
+      <img src="https://img.shields.io/badge/licencia-Apache--2.0-green" alt="License" />
+      <img src="https://img.shields.io/badge/plataforma-Windows%2010%20%7C%2011-blue" alt="Platform" />
+      <img src="https://img.shields.io/badge/motor-xtool-232323" alt="Engine" />
+    </div>
+    <div class="buttons" style="margin-top:20px">
+      <a class="btn primary" href="https://github.com/AQuirozAI/winios.studio/releases">Download installer</a>
+      <a class="btn ghost" href="https://github.com/AQuirozAI/winios.studio">View on GitHub</a>
+    </div>
+  </header>
+
+  <section class="wrap">
+    <h2>What it does</h2>
+    <div class="grid">
+      <div class="card"><b>🧙 One-click setup</b><span>WSL → Swift 6.4 → xtool → SDK (your Xcode.xip) → Apple ID → iPhone bridge. Idempotent, self-repairing, isolated distro.</span></div>
+      <div class="card"><b>🚀 Run on my iPhone</b><span>build → sign → package → connect → install → verify, with real phase logs.</span></div>
+      <div class="card"><b>🔎 Honest states</b><span>Installed is not opened. Errors come with the next action, never invented progress.</span></div>
+      <div class="card"><b>🖥️ VS Code ready</b><span>One click opens the project in VS Code — remote server + Swift extension + build server.</span></div>
+    </div>
+  </section>
+
+  <section class="wrap">
+    <h2>Compatibility matrix</h2>
+    <p class="muted">Verified hands-on on a single test machine as of 2026-10-20. We only claim what we tested.</p>
+    <table>
+      <tr><th>Component</th><th>Status</th><th>Notes</th></tr>
+      <tr><td>Windows 11 x64 + WSL2</td><td class="ok">✔ Verified</td><td>Full cycle: setup → build → install → app runs on iPhone</td></tr>
+      <tr><td>iPhone · iOS 27.0 (iPhone16,1/17,2 class)</td><td class="ok">✔ Verified</td><td>Free Apple ID · Installing 100% · Verifying 100%</td></tr>
+      <tr><td>Apple Mobile Device Service (iTunes 12.13.11.1)</td><td class="ok">✔ Verified</td><td>usbmuxd over TCP 27015 + portproxy — bypasses the usbipd Installing failure</td></tr>
+      <tr><td>Swift 6.4.1 + xtool 1.22.2 (isolated distro)</td><td class="ok">✔ Verified</td><td>8.3 s first build · 0.8 s incremental</td></tr>
+      <tr><td>Windows 10</td><td class="warn">▢ Untested</td><td>Expected to work (WSL2 + same components); no hands-on run yet</td></tr>
+      <tr><td>iOS versions other than 27</td><td class="question">? Unverified</td><td>xtool targets current iOS; individual version tests pending</td></tr>
+      <tr><td>Paid Apple Developer account (API key)</td><td class="question">? Unverified</td><td>xtool supports API-key login; not exercised here yet</td></tr>
+      <tr><td>Windows ARM64</td><td class="question">? Unverified</td><td>Installer and toolchain targets are x64 today</td></tr>
+      <tr><td>iOS Simulator · SwiftUI Previews · hot reload</td><td class="warn">✖ Not supported</td><td>macOS-only capabilities; device preview capture is on the roadmap</td></tr>
+      <tr><td>Existing .xcodeproj import</td><td class="warn">✖ Not supported</td><td>SwiftPM/SwiftUI template today; import is on the roadmap</td></tr>
+    </table>
+  </section>
+
+  <section class="wrap">
+    <h2>Legal</h2>
+    <p class="muted">Apple's Xcode &amp; Apple SDKs agreement forbids installing Apple SDKs on non-Apple-branded hardware. WiniOS Studio redistributes nothing from Apple: you download your own Xcode.xip with your own Apple ID and sign with your own credentials — the same approach as xtool. Use at your own risk with free/personal accounts; extra caution with corporate Apple IDs. Not affiliated with or endorsed by Apple Inc.</p>
+  </section>
+
+  <footer class="wrap">
+    <a href="https://github.com/AQuirozAI/winios.studio">GitHub</a> ·
+    <a href="https://github.com/AQuirozAI/winios.studio/releases">Releases</a> ·
+    <a href="https://github.com/AQuirozAI/winios.studio/blob/main/README.md">README</a> ·
+    <a href="https://github.com/AQuirozAI/winios.studio/blob/main/CONTRIBUTING.md">Contributing</a> ·
+    <a href="https://github.com/AQuirozAI/winios.studio/blob/main/SECURITY.md">Security</a>
+    <div>© 2026 AQuirozAI · Apache-2.0 · “Apple”, “iPhone”, “Xcode” and “SwiftUI” are trademarks of Apple Inc.</div>
+  </footer>
+</body>
+</html>
