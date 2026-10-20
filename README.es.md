@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="app/src-tauri/icons/128x128@2x.png" width="112" alt="WiniOS Studio" />
+<a href="https://aquirozai.github.io/winios.studio/"><img src="site/assets/og-winios-studio.jpg" width="960" alt="WiniOS Studio — Build iOS apps. From Windows. Open source, early preview." /></a>
 
 # WiniOS Studio
 
@@ -15,6 +15,8 @@
 [![PRs bienvenidos](https://img.shields.io/badge/PRs-welcome-brightgreen)](CONTRIBUTING.md)
 
 [English](README.md) · Español
+
+[Página web](https://aquirozai.github.io/winios.studio/) · [Descargar](https://github.com/AQuirozAI/winios.studio/releases) · [Reportar un problema](https://github.com/AQuirozAI/winios.studio/issues)
 
 > [!WARNING]
 > **Pre-release temprano.** El ciclo completo está probado en un equipo (Windows 11 + WSL2 + iPhone con iOS 27). Revisa las [preguntas frecuentes](#preguntas-frecuentes) antes de instalar.

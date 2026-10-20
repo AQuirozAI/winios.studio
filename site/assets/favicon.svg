@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <rect x="0" y="0" width="1024" height="1024" rx="232" fill="#123F44"/>
+  <path d="M232 0 A232 232 0 0 1 0 232 L0 0 Z" fill="#FFFFFF" opacity="0.05"/>
+
+  <!-- teléfono -->
+  <rect x="292" y="160" width="440" height="704" rx="104" fill="none" stroke="#F4F7F6" stroke-width="44"/>
+  <rect x="468" y="232" width="88" height="20" rx="10" fill="#F4F7F6"/>
+
+  <!-- flecha de instalación dentro de la pantalla -->
+  <g fill="#7BC9B4">
+    <rect x="484" y="382" width="56" height="196" rx="8"/>
+    <path d="M404 548 L620 548 L512 700 Z"/>
+    <rect x="372" y="726" width="280" height="42" rx="21"/>
+  </g>
+</svg>
