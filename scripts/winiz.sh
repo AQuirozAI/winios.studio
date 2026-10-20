@@ -25,7 +25,7 @@ ok()   { printf "\033[1;32m✓ %s\033[0m\n" "$*"; }
 warn() { printf "\033[1;33m! %s\033[0m\n" "$*"; }
 fail() { printf "\033[1;31m✗ %s\033[0m\n" "$*"; exit 1; }
 
-grep -qi microsoft /proc/version || fail "Esto corre dentro de WSL (Ubuntu)."
+grep -qi microsoft /proc/version || fail "Esto corre dentro de WSL (usalo desde la distro aislada WinIOS)."
 
 amds_service_running() { # Windows: servicio Apple escuchando + puerto accesible
   powershell.exe -NoProfile -Command "(Get-Service 'Apple Mobile Device Service' -ErrorAction SilentlyContinue).Status -eq 'Running' -and ((Get-NetTCPConnection -LocalPort 27015 -State Listen -ErrorAction SilentlyContinue) -ne \$null)" 2>/dev/null | grep -qi true
@@ -38,7 +38,7 @@ cmd_status() {
   command -v swift >/dev/null && ok "Swift $(swift --version 2>&1 | head -1 | grep -o '[0-9]*\.[0-9]*\.[0-9]*' | head -1)" || warn "Swift no instalado"
   [ -x "$APPIMAGE" ] && ok "xtool $("$APPIMAGE" --version 2>/dev/null)" || warn "xtool no instalado ($(basename $XTOOL) apuntará a él)"
   "$APPIMAGE" auth status 2>/dev/null | head -1 | grep -q 'Logged in' && ok "Sesión Apple activa" || warn "Sesión Apple requerida: '$APPIMAGE' setup"
-  "$APPIMAGE" sdk status 2>/dev/null | grep -qi 'installed' && ok "SDK Darwin instalado" || warn "SDK ausente"
+  "$APPIMAGE" sdk status 2>/dev/null | grep -qi 'is installed' && ok "SDK Darwin instalado" || warn "SDK ausente"
   pgrep -x usbmuxd >/dev/null && warn "usbmuxd local corre (no debe pelear con el bridge; no ocurre a menos que use usbip)" || true
   desc "Transporte iPhone"
   if amds_service_running; then ok "Apple Mobile Device Service (Windows): corre y escucha 27015"
@@ -67,7 +67,6 @@ Stop-Process -Name 'AppleMobileDeviceProcess','AppleMobileDeviceLauncher' -Force
 Start-Process msiexec -ArgumentList '/i','C:\Users\Public\AppleMobileDeviceSupport64.msi','/qn','/norestart' -Wait
 Start-Sleep 2
 Start-Service 'Apple Mobile Device Service' -ErrorAction SilentlyContinue
-start_itunes
 PS1
       powershell.exe -NoProfile -Command "Start-Process powershell -Verb RunAs -Wait -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','C:\Users\Public\winiz-amds.ps1'"
     }
