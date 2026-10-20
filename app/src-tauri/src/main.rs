@@ -413,8 +413,12 @@ fn auth_login(app: AppHandle, username: String, password: String) -> Result<Stri
     let u = username.replace('\'', "'\\''");
     let p = password.replace('\'', "'\\''");
     let mut child = spawn_wsl(WUSER)?;
+    // `; exit` en la MISMA línea ya leída por bash: cuando xtool termina
+    // (éxito o error) script/bash/wsl se cierran y stdout da EOF — sin esto
+    // bash queda bloqueado leyendo el stdin que la app sostiene abierto y
+    // la UI nunca pasa a la vista de resultado
     let cmdline = format!(
-        "script -q -f -c 'exec /home/{WUSER}/.local/bin/xtool auth login -u '{u}' -p '{p}' -m password' /dev/null\n"
+        "script -q -f -c 'exec /home/{WUSER}/.local/bin/xtool auth login -u '{u}' -p '{p}' -m password' /dev/null; exit\n"
     );
     if let Some(sin) = child.stdin.as_mut() {
         let _ = sin.write_all(PROLOGUE.as_bytes());
