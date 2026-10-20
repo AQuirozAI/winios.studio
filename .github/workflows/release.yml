@@ -1,0 +1,61 @@
+# Release · instalador Windows
+#
+# Al pushear un tag v* (o disparar a mano) compila el bundle NSIS y sube
+# el instalador como asset del release correspondiente (crea el release
+# si el tag es nuevo, o adjunta a uno existente).
+#
+# Diseño:
+#   · usa tauri-action solo para BUILD (sin tagName/releaseName) y luego
+#     softprops/action-gh-release para adjuntar — así no colisiona con
+#     releases ya publicados con el mismo tag.
+#   · `workflow_dispatch` desde main corre el build sin adjuntar nada.
+
+name: Release · Windows installer
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Windows · NSIS → release asset
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: app/src-tauri -> target
+
+      - name: tauri-cli prebuilt
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -UseBasicParsing "https://github.com/tauri-apps/tauri/releases/download/tauri-cli-v2.12.3/cargo-tauri-x86_64-pc-windows-msvc.zip" -OutFile cargo-tauri.zip
+          Expand-Archive -Force cargo-tauri.zip .
+          $exe = (Get-ChildItem -Recurse -Filter cargo-tauri.exe | Select-Object -First 1).FullName
+          Copy-Item $exe "$env:RUNNER_TEMP\cargo-tauri.exe"
+
+      - name: Build (release + NSIS)
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tauriScript: ${{ runner.temp }}\cargo-tauri.exe
+          args: --bundles nsis
+
+      - name: Adjuntar instalador al release del tag
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: app/src-tauri/target/release/bundle/nsis/*-setup.exe

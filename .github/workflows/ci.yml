@@ -1,0 +1,67 @@
+# CI · build Windows
+#
+# El gate principal: compila el motor Tauri (release) y el bundle NSIS en un
+# runner limpio de Windows. Si pasa, el instalador se puede reproducir en
+# una máquina sin preparar previamente (requisito del spec: no declarar
+# "instalador limpio probado" con un solo equipo preparado).
+#
+# Artifacts: el instalador queda como artifact del run para probar sin
+# crear release.
+
+name: CI · Windows build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Windows · release + NSIS
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo (incremental entre runs)
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: app/src-tauri -> target
+
+      # tauri-cli prebuilt (mismo patrón del build local: scripts/build-windows.ps1)
+      - name: tauri-cli prebuilt
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -UseBasicParsing "https://github.com/tauri-apps/tauri/releases/download/tauri-cli-v2.12.3/cargo-tauri-x86_64-pc-windows-msvc.zip" -OutFile cargo-tauri.zip
+          Expand-Archive -Force cargo-tauri.zip .
+          $exe = (Get-ChildItem -Recurse -Filter cargo-tauri.exe | Select-Object -First 1).FullName
+          Copy-Item $exe "$env:RUNNER_TEMP\cargo-tauri.exe"
+
+      - name: Build (release + NSIS)
+        shell: pwsh
+        working-directory: app/src-tauri
+        run: |
+          $env:Path = "$env:RUNNER_TEMP;$env:Path"
+          cargo-tauri build --bundles nsis
+
+      - name: Localizar instalador
+        id: setup
+        shell: pwsh
+        run: |
+          $exe = (Get-ChildItem "app/src-tauri/target/release/bundle/nsis/*-setup.exe" | Select-Object -First 1).FullName
+          if (-not $exe) { throw "no se encontro el instalador NSIS" }
+          "installer=$exe" >> $env:GITHUB_OUTPUT
+          "name=$(Split-Path $exe -Leaf)" >> $env:GITHUB_OUTPUT
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: winios-studio-setup
+          path: ${{ steps.setup.outputs.installer }}
