@@ -299,6 +299,9 @@ textarea.idea:focus { outline: 2px solid var(--run); outline-offset: 0; }
 }
 .log .err { color: #E2737F; }
 .log-line { margin: 0 0 1px; }
+.log-line.hl { color: var(--z1); font-weight: 600; margin-top: 6px; }
+.empty-state { text-align: center; padding: 26px 12px 6px; }
+.empty-state .hint { color: var(--z3); margin-bottom: 12px; }
 
 /* técnicos plegables con salida/original */
 details.tech { margin-top: 10px; }

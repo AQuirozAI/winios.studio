@@ -105,6 +105,7 @@ const I18N = {
     fixHint: "Falta configuración del entorno", fixSub: "La app sabe repararlo sola, sin consola ni manual:",
     fixBtn: "Reparar automáticamente",
     whatCreate: "Qué quieres crear",
+    actEmpty: "Aún no hay actividad en esta ejecución. Conecta tu iPhone y lanza tu app:",
     checking: "Comprobando…",
     envErrorTitle: "El entorno no responde",
     copied: "Copiado",
@@ -208,6 +209,7 @@ const I18N = {
     fixHint: "Environment needs setup", fixSub: "The app can repair itself, no console or manual:",
     fixBtn: "Repair automatically",
     whatCreate: "What do you want to create",
+    actEmpty: "No activity in this run yet. Connect your iPhone and launch your app:",
     checking: "Checking…",
     envErrorTitle: "The environment is not responding",
     copied: "Copied",
@@ -566,11 +568,16 @@ function vActivity() {
   const banner = !state.status ? "" : `<div class="status-banner ${state.status === "fail" ? "err" : "ok"}">
     ${state.status === "installed" ? T("bannerInstalled") : state.status === "build" ? T("bannerBuild") : T("bannerFail")}
   </div>`;
+  const empty = !state.log.length && !state._runBusy ? `<div class="empty-state">
+    <p class="hint">${T("actEmpty")}</p>
+    <button class="primary" id="btn-run-now">${T("run")}</button>
+  </div>` : "";
   return `<div class="vhead">
     <h1>${T("activity")}</h1>
   </div>
   <div class="phases">${phases}</div>
-  <div class="log" id="log" tabindex="0" aria-label="log">${state.log.map((l) => `<div class="log-line ${/Error|error/i.test(l.line) ? "err" : ""}">${esc(l.line)}</div>`).join("")}</div>
+  <div class="log" id="log" tabindex="0" aria-label="log">${state.log.map((l) => `<div class="log-line ${l.cls || (/Error|error/i.test(l.line) ? "err" : "")}">${esc(l.line)}</div>`).join("")}</div>
+  ${empty}
   ${banner}
   ${state.status === "fail" ? `<div class="row-actions" style="margin-top:10px">
     <button class="primary" id="btn-next">${T("setupRetry")}</button>
@@ -738,6 +745,7 @@ function wire() {
   });
   $("btn-auth-back")?.addEventListener("click", () => { state.view = state.auth.back; render(); });
   $("btn-auth-retry")?.addEventListener("click", () => { state.auth.step = "form"; state.auth.lines = []; state.auth.result = null; render(); });
+  $("btn-run-now")?.addEventListener("click", doRun);
   $("btn-wslcore")?.addEventListener("click", async (e) => {
     e.target.disabled = true;
     try { const r = await invoke("setup_distro"); if (r === "reboot") { const n = $("wslcore-note"); if (n) n.textContent = T("wslcoreReboot"); state.setup.steps.wslcore = "reboot"; render(); } }
@@ -753,19 +761,27 @@ function wire() {
   drop?.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("over"); });
   drop?.addEventListener("dragleave", () => drop.classList.remove("over"));
 
-  // diálogo crear proyecto: se enlaza una sola vez
+  // diálogo crear proyecto: se enlaza TODO una sola vez (el render duplica
+  // listeners: un close replicado lanzaba new_project 3× en paralelo y la
+  // creacióncompetía contra sí misma)
   const dlg = $("dlg-new");
   if (!dlg._wired) {
     dlg._wired = true;
     $(dlg.id + "-form").addEventListener("submit", (e) => {
-      if (e.submitter?.value === "ok" && !$("dlg-new-ok").onclick()) {
-        e.preventDefault(); // inválido: el diálogo permanece abierto
+      if (e.submitter?.value === "cancel") return; // cancelar: cierra sin validar
+      if (!$("dlg-new-ok").onclick()) e.preventDefault(); // inválido: permanece abierto
+    });
+    // Enter en el campo: valida y envía (el submit implícito podría elegir Cancelar)
+    $("dlg-new-name").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        if ($("dlg-new-ok").onclick()) $("dlg-new-ok").click();
       }
     });
+    dlg.addEventListener("close", () => {
+      if (dlg.returnValue === "ok") { state.view = "projects"; createProject($("dlg-new-name").value.trim()); }
+    });
   }
-  dlg.addEventListener("close", () => {
-    if (dlg.returnValue === "ok") createProject();
-  });
 }
 
 /* ---------- próximas acciones (mismo destino en botón, next-step y error) ---------- */
@@ -804,16 +820,36 @@ function openNewProject() {
 }
 const validClientName = (n) => /^[A-Za-z][A-Za-z0-9_-]*$/.test(n);
 
-async function createProject() {
-  const name = $("dlg-new-name").value.trim();
+/* línea en Actividad (evidencia real del motor, no simulada) */
+function logLine(line, cls) {
+  state.log.push(cls ? { line, cls } : { line });
+  if (state.log.length > 900) state.log = state.log.slice(-700);
+  const $log = $("log");
+  if ($log) {
+    $log.insertAdjacentHTML("beforeend", `<div class="log-line ${cls || ""}">${esc(line)}</div>`);
+    $log.scrollTop = $log.scrollHeight;
+  }
+}
+
+async function createProject(name) {
   if (!name) return;
   try {
     await invoke("new_project", { name });
     localStorage.setItem("winios.project", name);
-    await bootstrap(true);
-    toast(Tf("projCreated", { N: name }), "ok");
+    await bootstrap();
     state.view = "projects"; render();
+    logLine(`✓ ${Tf("projCreated", { N: name })}`, "ok");
+    toast(Tf("projCreated", { N: name }), "ok");
   } catch (e) {
+    logLine(`✗ ${T("newProj")}: ${e}`, "err");
+    // el error NUNCA se silencia: vuelve el diálogo con el motivo visible
+    const dlg = $("dlg-new");
+    const err = $("dlg-new-err");
+    err.textContent = String(e);
+    err.hidden = false;
+    $("dlg-new-name").value = name;
+    dlg.showModal();
+    $("dlg-new-name").focus();
     toast(String(e), "err");
   }
 }
@@ -825,10 +861,11 @@ async function doRun() {
   state.view = "activity"; state.phases = {}; state.log = []; state.status = null;
   state._runBusy = true;
   render();
+  logLine(`▶ ${T("run")} · ${project} → iPhone`, "hl");
   try {
     await invoke("run_project", { name: project });
   } catch (e) {
-    state.log.push({ line: "ERR: " + e, phase: null });
+    logLine("ERR: " + e, "err");
     state.status = "fail"; state._runBusy = false; render();
   }
 }
@@ -892,15 +929,9 @@ function toast(msg, kind) {
 /* ---------- eventos del motor: despliegue ---------- */
 listen("deploy://line", (ev) => {
   const { line } = ev.payload;
-  state.log.push({ line });
-  if (state.log.length > 900) state.log = state.log.slice(-700);
+  logLine(line, /error|fatal|failed/i.test(line) ? "err" : "");
   if (line.includes("Building") && !state.phases.unpacking) state.phases.unpacking = 1;
   refreshPhaseFromLine(line);
-  const $log = $("log");
-  if ($log) {
-    $log.insertAdjacentHTML("beforeend", `<div class="log-line ${/Error/i.test(line) ? "err" : ""}">${esc(line)}</div>`);
-    $log.scrollTop = $log.scrollHeight;
-  }
 });
 
 function refreshPhaseFromLine(line) {
