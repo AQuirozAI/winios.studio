@@ -249,8 +249,12 @@ function stepState(id) {
 
 /* ---------- render ---------- */
 function render() {
+  // conservar la posición de scroll entre renders: el repintado no sacude la vista
+  const keep = { view: $view.dataset.view, top: $view.scrollTop };
   renderTopbar(); renderRail();
   $view.innerHTML = { home: vHome, setup: vSetup, projects: vProjects, devices: vDevices, activity: vActivity, settings: vSettings }[state.view]();
+  $view.dataset.view = state.view;
+  if (keep.view === state.view) $view.scrollTop = keep.top;
   wire();
 }
 
@@ -895,6 +899,11 @@ function setupNeeded() {
 /* arranque: primero se pinta la estructura con estado "Comprobando…",
    luego hydrata con datos reales; nada bloquea la ventana */
 document.documentElement.lang = lang;
+document.querySelectorAll(".rail-item").forEach((b) => b.addEventListener("click", () => {
+  if (state.view === b.dataset.view) return;
+  state.view = b.dataset.view;
+  render();
+}));
 render();
 bootstrap().then(() => {
   const needs = state.checks.some((c) => c.state === "fail" && c.id !== "phone");

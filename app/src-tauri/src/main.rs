@@ -39,8 +39,19 @@ export PATH="/opt/swift/usr/bin:$HOME/.local/bin:$PATH"
 
 // ---------- transporte de scripts hacia WSL (stdin, inmune al mangling) ----------
 
+// sin parpadeo de consola: todo proceso de Windows que lanza el motor va
+// oculto, salvo la consola visible y deseada para el Apple ID (setup_open_console)
+fn hide_console(mut c: Command) -> Command {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        c.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    }
+    c
+}
+
 fn spawn_wsl(user: &str) -> Result<Child, String> {
-    Command::new("wsl.exe")
+    hide_console(Command::new("wsl.exe"))
         .args(["-d", DISTRO, "-u", user, "--", "bash"])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -344,7 +355,7 @@ printf '@WINIOS:EXIT:%s\n' "$?""#,
 // Fase 1 (Rust): distro aislada — no toca ninguna distribución del usuario.
 fn ensure_distro(app: &AppHandle) -> Result<(), String> {
     // ¿la distro ya está lista (usuario winios accesible)?
-    let probe = Command::new("wsl.exe")
+    let probe = hide_console(Command::new("wsl.exe"))
         .args(["-d", DISTRO, "-u", WUSER, "--", "whoami"])
         .output();
     if let Ok(o) = &probe {
@@ -353,17 +364,17 @@ fn ensure_distro(app: &AppHandle) -> Result<(), String> {
         }
     }
     // la distro existe (aunque rota/incompleta): es nuestra, se reimporta
-    let exists = Command::new("wsl.exe")
+    let exists = hide_console(Command::new("wsl.exe"))
         .args(["-d", DISTRO, "--", "whoami"])
         .output()
         .map(|o| o.status.success())
         .unwrap_or(false);
     if exists {
         emit_line(app, "La distro aislada WinIOS estaba incompleta — reinstalando…");
-        let _ = Command::new("wsl.exe").args(["--unregister", DISTRO]).output();
+        let _ = hide_console(Command::new("wsl.exe")).args(["--unregister", DISTRO]).output();
     }
     emit_line(app, "activando la plataforma WSL (Windows puede pedir permiso)…");
-    let act = Command::new("wsl.exe")
+    let act = hide_console(Command::new("wsl.exe"))
         .args(["--install", "--no-distribution", "--web-download"])
         .output()
         .map_err(|e| format!("no se pudo activar WSL: {e}"))?;
@@ -394,7 +405,7 @@ fn ensure_distro(app: &AppHandle) -> Result<(), String> {
     if !std::path::Path::new(&rootfs).exists() {
         emit_line(app, "descargando Ubuntu 24.04 aislado (~370 MB, una sola vez)…");
         emit_step(app, "download", "running");
-        let mut dl = Command::new("curl.exe")
+        let mut dl = hide_console(Command::new("curl.exe"))
             .args(["-fL", "--retry", "3", ROOTFS_URL, "-o", &rootfs])
             .stderr(Stdio::null())
             .spawn()
@@ -436,7 +447,7 @@ fn ensure_distro(app: &AppHandle) -> Result<(), String> {
     }
 
     emit_line(app, "creando la distro aislada WinIOS…");
-    let imp = Command::new("wsl.exe")
+    let imp = hide_console(Command::new("wsl.exe"))
         .args(["--import", DISTRO, &distro_dir, &rootfs, "--version", "2"])
         .output()
         .map_err(|e| e.to_string())?;
@@ -462,9 +473,9 @@ printf '@WINIOS:PROVISIONED\n'
         return Err("no se pudo configurar el usuario de la distro aislada".into());
     }
     // el wsl.conf (usuario por defecto) se aplica tras reiniciar la distro
-    let _ = Command::new("wsl.exe").args(["--terminate", DISTRO]).output();
+    let _ = hide_console(Command::new("wsl.exe")).args(["--terminate", DISTRO]).output();
     std::thread::sleep(Duration::from_secs(2));
-    let verify = Command::new("wsl.exe")
+    let verify = hide_console(Command::new("wsl.exe"))
         .args(["-d", DISTRO, "-u", WUSER, "--", "whoami"])
         .output()
         .map(|o| o.status.success() && String::from_utf8_lossy(&o.stdout).trim() == WUSER)
@@ -624,10 +635,10 @@ fn setup_run(app: AppHandle) -> Result<String, String> {
     let h = app.clone();
     let _ = std::thread::spawn(move || {
         // ¿WSL (el subsistema, no distribuciones) está activo?
-        let core = Command::new("wsl.exe").args(["--status"]).output();
+        let core = hide_console(Command::new("wsl.exe")).args(["--status"]).output();
         if !core.map(|o| o.status.success()).unwrap_or(false) {
             // intentar activarlo sin crear distribuciones del usuario
-            let act = Command::new("wsl.exe")
+            let act = hide_console(Command::new("wsl.exe"))
                 .args(["--install", "--no-distribution", "--web-download"])
                 .output();
             match act {
@@ -722,11 +733,11 @@ fn setup_open_console(kind: String) -> Result<String, String> {
 // El núcleo WSL de Windows no está activo: activarlo lo exige Windows con UAC/reinicio
 #[tauri::command]
 fn setup_distro() -> Result<String, String> {
-    let probe = Command::new("wsl.exe").args(["--status"]).output();
+    let probe = hide_console(Command::new("wsl.exe")).args(["--status"]).output();
     if probe.map(|o| o.status.success()).unwrap_or(false) {
         return Ok("ready".into());
     }
-    let out = Command::new("wsl.exe")
+    let out = hide_console(Command::new("wsl.exe"))
         .args(["--install", "--no-distribution"])
         .output()
         .map_err(|e| format!("no se pudo lanzar wsl --install: {e}"))?;
