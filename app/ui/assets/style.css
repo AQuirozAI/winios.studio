@@ -1,0 +1,135 @@
+/* WiniOS Studio — sistema visual (DESIGN.md): Zone tokenos, IBM Plex */
+@font-face { font-family: "IBM Plex Sans"; src: url("fonts/plex-sans-400.woff2") format("woff2"); font-weight: 400; }
+@font-face { font-family: "IBM Plex Sans"; src: url("fonts/plex-sans-600.woff2") format("woff2"); font-weight: 600; }
+@font-face { font-family: "IBM Plex Sans Condensed"; src: url("fonts/plex-condensed-400.woff2") format("woff2"); font-weight: 400; }
+@font-face { font-family: "IBM Plex Mono"; src: url("fonts/plex-mono-400.woff2") format("woff2"); font-weight: 400; }
+
+:root {
+  --z0: #182528; --z1: #29383A; --z2: #3D5052; --z3: #56696A; --z4: #748482;
+  --z6: #AFBBB2; --z7: #C5D0C5; --z8: #D9E2D8; --z9: #E8EEE6; --z10: #F4F5EC;
+  --ok: #2F7355; --warn: #A66C12; --err: #B44246; --run: #276C83; --codex: #B83D78;
+  --radius: 8px;
+}
+
+* { box-sizing: border-box; margin: 0; }
+html, body { height: 100%; }
+body {
+  font-family: "IBM Plex Sans", system-ui, sans-serif;
+  font-size: 14px; color: var(--z0); background: var(--z9);
+  display: flex; flex-direction: column; overflow: hidden; user-select: none;
+}
+
+/* Barra superior */
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  height: 48px; padding: 0 12px 0 14px; background: var(--z10);
+  border-bottom: 1px solid var(--z6); flex: none;
+}
+.brand { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+.brand svg { border-radius: 4px; display: block; }
+.brand-name { letter-spacing: 0.2px; }
+.topbar-context { display: flex; align-items: center; gap: 8px; }
+
+.chip {
+  font: inherit; padding: 5px 10px; border: 1px solid var(--z6); border-radius: 6px;
+  background: var(--z10); color: var(--z0); min-width: 140px;
+}
+.chip-static { background: var(--z9); color: var(--z3); }
+button.primary {
+  font: inherit; font-weight: 600; padding: 7px 16px; border: none; border-radius: 6px;
+  background: var(--z0); color: var(--z10); cursor: pointer;
+}
+button.primary:hover { background: var(--z2); }
+button.primary:disabled { opacity: 0.45; cursor: default; }
+
+/* Shell */
+.shell { flex: 1; display: flex; min-height: 0; }
+.rail {
+  width: 168px; flex: none; background: var(--z7);
+  display: flex; flex-direction: column; gap: 2px; padding: 10px 8px;
+  border-right: 1px solid var(--z6);
+}
+.rail-item {
+  font: inherit; text-align: left; padding: 8px 12px; border: none; border-radius: 6px;
+  background: transparent; color: var(--z1); cursor: pointer;
+}
+.rail-item:hover { background: var(--z8); }
+.rail-item.active { background: var(--z0); color: var(--z10); font-weight: 600; }
+
+.main { flex: 1; overflow: auto; background: var(--z9); padding: 28px 32px; min-width: 0; }
+
+/* Inicio guiado */
+.guide-title { font-size: 24px; font-weight: 600; margin-bottom: 6px; }
+.guide-sub { color: var(--z3); margin-bottom: 22px; max-width: 640px; line-height: 1.5; }
+.cols { display: flex; gap: 28px; align-items: flex-start; flex-wrap: wrap; }
+.col { flex: 1 1 340px; max-width: 560px; }
+
+.card { background: var(--z10); border: 1px solid var(--z6); border-radius: 10px; padding: 14px 16px; margin-bottom: 10px; }
+.card h3 { font-size: 15px; font-weight: 600; margin-bottom: 10px; }
+textarea.idea {
+  width: 100%; min-height: 84px; font: inherit; resize: vertical;
+  border: 1px solid var(--z6); border-radius: 8px; padding: 10px; background: var(--z10);
+  color: var(--z0); margin-bottom: 10px;
+}
+.row-actions { display: flex; gap: 8px; align-items: center; }
+button.ghost {
+  font: inherit; padding: 7px 12px; border: 1px solid var(--z6); border-radius: 6px;
+  background: var(--z10); color: var(--z0); cursor: pointer;
+}
+button.ghost:hover { background: var(--z9); }
+button.big { font-size: 15px; font-weight: 600; padding: 10px 18px; }
+
+/* Checklist de preparación */
+.check { display: flex; align-items: flex-start; gap: 10px; padding: 7px 0; }
+.check + .check { border-top: 1px solid var(--z9); }
+.dot { width: 10px; height: 10px; border-radius: 50%; flex: none; margin-top: 5px; }
+.dot.ok { background: var(--ok); }
+.dot.warn { background: var(--warn); }
+.dot.fail { background: var(--err); }
+.dot.run { background: var(--run); }
+.check .name { font-weight: 600; min-width: 110px; }
+.check .detail { color: var(--z3); font-size: 12.5px; word-break: break-word; }
+.check .state-text { font-size: 12px; font-weight: 600; }
+.check .state-text.ok { color: var(--ok); }
+.check .state-text.fail { color: var(--err); }
+
+details.tech { margin-top: 10px; }
+details.tech summary { cursor: pointer; color: var(--z3); font-size: 12.5px; }
+details.tech pre {
+  margin-top: 6px; background: var(--z1); color: #C5D0C5; padding: 10px 12px;
+  border-radius: 8px; font: 12px "IBM Plex Mono", monospace; white-space: pre-wrap; user-select: text;
+}
+
+/* Dispositivos */
+.device-item { display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--z9); }
+.device-item .name { font-weight: 600; }
+.device-item .mode { font-family: "IBM Plex Mono", monospace; font-size: 12px; color: var(--z3); }
+
+/* Actividad (fases + log) */
+.phases { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+.phase {
+  font-family: "IBM Plex Sans Condensed", sans-serif; font-size: 12.5px;
+  padding: 4px 10px; border-radius: 99px; border: 1px solid var(--z6);
+  color: var(--z3); background: var(--z10);
+}
+.phase.done { color: #fff; background: var(--ok); border-color: var(--ok); }
+.phase.now { color: #fff; background: var(--run); border-color: var(--run); }
+.phase.failed { color: #fff; background: var(--err); border-color: var(--err); }
+
+.log {
+  background: var(--z1); color: #C5D0C5; border-radius: 8px; padding: 12px 14px;
+  font: 12px "IBM Plex Mono", monospace; white-space: pre-wrap; height: 340px;
+  overflow-y: auto; user-select: text;
+}
+.log .err { color: #e29; }
+.log-line { margin: 0 0 1px; }
+
+.status-banner { margin-top: 14px; padding: 10px 14px; border-radius: 8px; font-weight: 600; }
+.status-banner.ok { background: #dcead5; color: var(--ok); }
+.status-banner.warn { background: #f5ecd4; color: var(--warn); }
+.status-banner.err { background: #f4dcdc; color: var(--err); }
+
+/* Preferencias */
+.pref-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--z9); max-width: 480px; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }

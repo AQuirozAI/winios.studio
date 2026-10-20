@@ -41,7 +41,7 @@ La implementación fija versiones compatibles de Tauri 2, Rust y frontend, conse
 
 Catálogos `en` y `es` completos con claves estables, fallback inglés, primera elección según idioma del sistema y selector persistente que no reinicia operaciones. Plurales, fechas y unidades se formatean con la biblioteca/Intl; no se concatenan frases ni se traduce código/rutas/bundle IDs. Cambiar idioma conserva proyecto, dispositivo, conversación y ejecución. Se verifica expansión del español, pseudo-localización y nombres Unicode/rutas con espacios. Idioma del estudio y de la app creada son preferencias distintas.
 
-Impeccable está instalado y se aplican sus guías de experiencia Operate: claridad de tareas, jerarquía, estados, accesibilidad y consistencia. PRODUCT.md contiene requisitos confirmados y decisiones pendientes. La dirección visual se concreta antes de escribir UI; no hay todavía diseño visual, logo o sistema de tokens aprobados. Se verifica el producto renderizado, no se acredita calidad por instalar una skill.
+Impeccable está instalado y se aplican sus guías de experiencia Operate: claridad de tareas, jerarquía, estados, accesibilidad y consistencia. La dirección visual aprobada, tokens y criterios de revisión viven en [DESIGN.md](../../../DESIGN.md). No hay logotipo aprobado. La calidad se verifica en el producto renderizado; instalar una skill no acredita calidad.
 
 ## Onboarding asistido
 
@@ -79,7 +79,9 @@ Errores comunes tienen explicación y siguiente paso: teléfono bloqueado/descon
 
 ## Diseño de la experiencia
 
-Estudio tranquilo y claro con profundidad progresiva. Inicio guiado: objetivo, idea/plantilla, iPhone y siguiente acción. Entorno profesional: explorador a la izquierda, editor central, Codex a la derecha, Git/terminal/problemas disponibles y actividad de compilación abajo. La misma barra de ejecución mantiene visibles proyecto y dispositivo. Cambiar de vista conserva archivos, conversación, selección y trabajo en curso. Se reutilizan componentes de edición/diff/terminal; no se rediseñan affordances estándar por decoración.
+Estudio de exposición profesional, claro y de profundidad progresiva: neutrales retroiluminados, once tonos minerales, tipografía IBM Plex, shell de escritorio familiar y una lámina de revisión para mostrar propuestas, diffs y evidencia. La lámina solo aparece al comparar o inspeccionar; tramas cruzadas señalan conflictos entre cambios locales y de Codex. La dirección y sus límites se mantienen en [DESIGN.md](../../../DESIGN.md).
+
+Inicio guiado: objetivo, idea/plantilla, iPhone y siguiente acción. El entorno profesional conserva explorador a la izquierda, editor central, Codex a la derecha, Git/terminal/problemas disponibles y actividad de compilación abajo. La misma barra de ejecución mantiene visibles proyecto y dispositivo. Cambiar de vista conserva archivos, conversación, selección y trabajo en curso. Se reutilizan componentes de edición/diff/terminal; no se rediseñan controles estándar por decoración.
 
 Onboarding y recuperación usan texto cotidiano en EN/ES. Verde indica una comprobación real completada, ámbar una intervención necesaria y rojo un fallo; los estados no dependen solo del color. Buen contraste, foco visible, etiquetas accesibles, escala Windows y reducción de movimiento. La interfaz sigue siendo utilizable cuando faltan Codex o iPhone. No se anuncia un porcentaje inventado de preparación ni un simulador cuando se muestra una captura/preview diferente.
 

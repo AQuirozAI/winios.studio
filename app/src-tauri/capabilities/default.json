@@ -1,0 +1,7 @@
+{
+  "$schema": "gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Permisos mínimos: APIs core (eventos) para la ventana principal.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

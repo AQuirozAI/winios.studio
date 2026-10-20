@@ -41,7 +41,7 @@ Uso en una computadora Windows con un iPhone conectado. En este equipo hay WSL2,
 
 ## Brand Commitments
 
-Nombre: WiniOS Studio. El usuario solicita diseño amigable y profesional mediante Impeccable. No hay logotipo, paleta, tipografía ni referencia visual confirmados; no se inventa una marca visual como si estuviera aprobada.
+Nombre: WiniOS Studio. El usuario aprobó una dirección visual profesional y sencilla basada en un estudio de exposición, con revisión por capas y evidencia verificable. Paleta, tipografía, composición, interacción y límites visuales están definidos en [DESIGN.md](DESIGN.md). No hay logotipo aprobado; no se inventa uno.
 
 ## Evidence on Hand
 

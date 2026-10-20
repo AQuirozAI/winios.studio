@@ -1,6 +1,6 @@
 # Contexto de producto: WiniOS Studio
 
-Versión: borrador v2. Última actualización: 2026-10-13. Contexto confirmado para diseño también en [PRODUCT.md](../PRODUCT.md).
+Versión: borrador v3. Última actualización: 2026-10-14. Contexto confirmado para diseño también en [PRODUCT.md](../PRODUCT.md).
 
 ## Hechos proporcionados por el usuario
 
@@ -13,7 +13,7 @@ Versión: borrador v2. Última actualización: 2026-10-13. Contexto confirmado p
 - Inglés y español desde el inicio, localización extensible.
 - Motor Rust + Tauri elegido explícitamente por el usuario; UX y rendimiento medido.
 - Evolución a otros tipos de desarrollo; compatibilidad transparente y correcciones automáticas con recuperación.
-- Impeccable solicitado e instalado para diseño.
+- Impeccable solicitado e instalado para diseño; dirección visual aprobada y documentada en [DESIGN.md](../DESIGN.md).
 
 ## Decisiones propuestas, pendientes de revisión
 
@@ -27,5 +27,6 @@ El archivo está en `docs` porque `.agents` es un montaje de solo lectura en est
 
 ## Cambios
 
+- v3 (2026-10-14): incorpora la dirección visual aprobada, sus estándares permanentes y la investigación de necesidades de desarrollo iOS desde Windows.
 - v2 (2026-10-13): incorpora la elección Rust/Tauri, EN/ES, extensibilidad, compatibilidad/recuperación, Impeccable y el condicionante comercial del SDK Apple.
 - v1 (2026-10-13): recoge el brief y la ampliación explícita a usuarios sin experiencia; separa hechos de hipótesis comerciales.

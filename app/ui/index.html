@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<title>WiniOS Studio</title>
+<link rel="stylesheet" href="assets/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <svg width="18" height="18" viewBox="0 0 1024 1024"><use href="assets/icon.svg#w"/></svg>
+      <span class="brand-name">WiniOS Studio</span>
+    </div>
+    <div class="topbar-context">
+      <select id="project-select" class="chip" aria-label="Proyecto activo"></select>
+      <span id="device-chip" class="chip chip-static" data-i18n="noDevice">Sin iPhone</span>
+      <button id="btn-run" class="primary" data-i18n="run">Ejecutar en mi iPhone</button>
+    </div>
+  </header>
+
+  <div class="shell">
+    <nav class="rail" aria-label="Navegación">
+      <button data-view="home" class="rail-item active" data-i18n-nav="home">Inicio</button>
+      <button data-view="projects" class="rail-item" data-i18n-nav="projects">Proyectos</button>
+      <button data-view="devices" class="rail-item" data-i18n-nav="devices">Dispositivos</button>
+      <button data-view="activity" class="rail-item" data-i18n-nav="activity">Actividad</button>
+      <button data-view="settings" class="rail-item" data-i18n-nav="settings">Preferencias</button>
+    </nav>
+
+    <main id="view" class="main"></main>
+  </div>
+
+  <script src="assets/app.js"></script>
+</body>
+</html>
