@@ -74,7 +74,7 @@ Comandos del motor (Tauri, uno por operación — la UI nunca genera comandos li
 
 ### Opción A — instalador (recomendada)
 
-1. Descarga `dist/WiniOS-Studio-Setup-0.1.0.exe` y ejecútalo.
+1. Descarga el instalador de la última [release](https://github.com/AQuirozAI/winios.studio/releases) (`WiniOS-Studio-Setup-<versión>.exe`) y ejecútalo.
 2. Al primer arranque, el asistente configura **todo** automáticamente (acepta los permisos que Windows pida).
 3. Cuando el asistente lo pida: arrastra tu `Xcode.xip` e inicia sesión con tu Apple ID (2FA incluido).
 4. Conecta tu iPhone, pulsa **Ejecutar en mi iPhone** y listo.
