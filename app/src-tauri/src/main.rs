@@ -262,18 +262,47 @@ fn valid_name(name: &str) -> bool {
         .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
 }
 
+// ---------- escritorio amable por proyecto (VS Code + git base) ----------
+
+// Cada proyecto se entrega listo para trabajar fuera de la app: ajustes de la
+// extensión Swift (el toolchain vive en /opt/swift y NO queda en el PATH del
+// servidor de VS Code — shells de login sí, extension host no), recomendación
+// de la extensión oficial de Swift y un repositorio git con commit base (la
+// vista de Control de Código de VS Code necesita un punto de partida).
+// Idempotente: se re-ejecuta sin romper nada. El nombre ya pasó valid_name,
+// así que viaja al shell como literal seguro.
+fn project_desktop_shell(project: &str) -> String {
+    let s: &str = r#"
+_P="$WORK/projects/_PROJECT_"
+if test -d "$_P"; then
+  mkdir -p "$_P/.vscode"
+  printf '%s\n' '{"swift.path": "/opt/swift/usr/bin"}' > "$_P/.vscode/settings.json"
+  printf '%s\n' '{"recommendations": ["swiftlang.swift-vscode"]}' > "$_P/.vscode/extensions.json"
+  if ! test -d "$_P/.git" && command -v git >/dev/null 2>&1; then
+    (cd "$_P" || exit 0
+     git init -q
+     git config user.name >/dev/null 2>&1 || git config --local user.name winios
+     git config user.email >/dev/null 2>&1 || git config --local user.email winios@localhost
+     git add -A
+     git commit -q -m "Proyecto creado con WiniOS Studio" 2>/dev/null || true)
+  fi
+fi"#;
+    s.replace("_PROJECT_", project)
+}
+
 #[tauri::command]
 async fn new_project(name: String) -> Result<String, String> {
     if !valid_name(&name) {
         return Err("Nombre inválido".into());
     }
-    let out = run_script(&wrap_common(&format!(
+    let body = format!(
         r#"mkdir -p "$WORK/projects"
 cd "$WORK/projects"
 if ! test -d "{_NAME}"; then "$APP" new "{_NAME}" --skip-setup </dev/null 2>&1; fi
 if test -d "{_NAME}"; then printf '@WINIOS:DIR:%s\n' "$WORK/projects/{_NAME}"; else printf '@WINIOS:NO\n'; fi"#,
         _NAME = name
-    )));
+    );
+    let out = run_script(&wrap_common(&(body + "\n" + &project_desktop_shell(&name))));
     if let Some(l) = out.lines().find(|l| l.starts_with("@WINIOS:DIR:")) {
         return Ok(l["@WINIOS:DIR:".len()..].to_string());
     }
@@ -283,6 +312,88 @@ if test -d "{_NAME}"; then printf '@WINIOS:DIR:%s\n' "$WORK/projects/{_NAME}"; e
         .last()
         .unwrap_or("xtool no pudo crear el proyecto")
         .to_string())
+}
+
+// ---------- abrir el proyecto en VS Code (ventana remota WSL) ----------
+
+// Rutas: la vista Windows del proyecto (por P9, \\wsl.localhost) para verificar
+// su existencia y la ruta WSL que viaja al CLI de VS Code. Sintaxis oficial
+// `code --remote wsl+<distro> <ruta>`; la extensión WSL ya viene incluida en
+// VS Code moderno ("releases with VS Code"), nada que instalar aparte.
+fn windows_project_path(name: &str) -> String {
+    format!(
+        r"\\wsl.localhost\{}\home\{}\studio\projects\{}",
+        DISTRO, WUSER, name
+    )
+}
+
+fn wsl_project_path(name: &str) -> String {
+    format!("/home/{}/studio/projects/{}", WUSER, name)
+}
+
+// Detección del CLI: primero `where.exe code` (respeta PATH, cubre instalaciones
+// portable/zip), luego las rutas estándar: User setup (%LOCALAPPDATA%) y
+// System (Program Files), estable e Insiders. Se usa el .cmd vía cmd /C porque
+// el wrapper de PowerShell necesita su entorno.
+fn where_code() -> Option<String> {
+    let out = hide_console(Command::new("where.exe"))
+        .arg("code")
+        .output()
+        .ok()?;
+    let s = String::from_utf8_lossy(&out.stdout);
+    s.lines()
+        .find(|l| l.to_ascii_lowercase().ends_with("code.cmd"))
+        .or_else(|| s.lines().next())
+        .map(|l| l.trim().to_string())
+        .filter(|l| !l.is_empty())
+}
+
+fn find_code_cli() -> Option<String> {
+    let mut cands: Vec<String> = Vec::new();
+    if let Ok(lad) = std::env::var("LOCALAPPDATA") {
+        cands.push(format!(
+            r"{}\Programs\Microsoft VS Code\bin\code.cmd",
+            lad
+        ));
+        cands.push(format!(
+            r"{}\Programs\Microsoft VS Code Insiders\bin\code-insiders.cmd",
+            lad
+        ));
+    }
+    cands.push(r"C:\Program Files\Microsoft VS Code\bin\code.cmd".into());
+    cands.push(
+        r"C:\Program Files\Microsoft VS Code Insiders\bin\code-insiders.cmd".into(),
+    );
+    if let Some(p) = cands.iter().find(|c| std::path::Path::new(c).is_file()) {
+        return Some(p.clone());
+    }
+    where_code()
+}
+
+#[tauri::command]
+fn open_vscode(name: String) -> Result<String, String> {
+    if !valid_name(&name) {
+        return Err("Nombre inválido".into());
+    }
+    if !std::path::Path::new(&windows_project_path(&name)).is_dir() {
+        return Err(format!(
+            "El proyecto {name} todavía no existe en el entorno aislado"
+        ));
+    }
+    let Some(code) = find_code_cli() else {
+        return Err("VSCODE_MISSING".into());
+    };
+    hide_console(Command::new("cmd.exe"))
+        .args([
+            "/C",
+            &code,
+            "--remote",
+            &format!("wsl+{}", DISTRO),
+            &wsl_project_path(&name),
+        ])
+        .spawn()
+        .map_err(|e| format!("no se pudo abrir VS Code: {e}"))?;
+    Ok("opened".into())
 }
 
 // lector por frames: el progreso de xtool usa \r; cada frame del avance
@@ -977,7 +1088,15 @@ fn setup_run(app: AppHandle) -> Result<String, String> {
         match ensure_distro(&h) {
             Ok(()) => {
                 emit_step(&h, "distro", "ok");
-                let script_text = wrap_common(SETUP_SCRIPT.replace("__SWIFT_VER__", SWIFT_VERSION).as_str());
+                let script_text = wrap_common(
+                &(
+                    SETUP_SCRIPT
+                        .replace("__SWIFT_VER__", SWIFT_VERSION)
+                        // escritorio amable para el proyecto de ejemplo también
+                        + "\n"
+                        + &project_desktop_shell("WinizHello")
+                ),
+            );
                 match spawn_wsl(WUSER) {
                     Ok(child) => stream_child(h, "setup", child, &script_text),
                     Err(_) => {
@@ -1060,7 +1179,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             env_status, device_list, projects, new_project, run_project,
             setup_run, sdk_install, setup_distro,
-            auth_login, auth_feed, auth_close
+            auth_login, auth_feed, auth_close, open_vscode
         ])
         .run(tauri::generate_context!())
         .expect("error al correr WiniOS Studio");

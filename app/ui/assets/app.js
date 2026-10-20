@@ -112,6 +112,11 @@ const I18N = {
     checking: "Comprobando…",
     envErrorTitle: "El entorno no responde",
     copied: "Copiado",
+    openVscode: "Abrir en VS Code",
+    vsStarting: "Abriendo VS Code…",
+    vsOpened: "VS Code se abrió con «{P}». La primera vez prepara su servidor dentro del entorno: tarda unos segundos.",
+    vsMissing: "VS Code no está instalado. Descárgalo gratis en code.visualstudio.com — WiniOS abrirá tus proyectos en el entorno solo.",
+    vsNoProj: "Crea primero un proyecto.",
   },
   en: {
     home: "Home", projects: "Projects", devices: "Devices", activity: "Activity", settings: "Preferences",
@@ -219,6 +224,11 @@ const I18N = {
     checking: "Checking…",
     envErrorTitle: "The environment is not responding",
     copied: "Copied",
+    openVscode: "Open in VS Code",
+    vsStarting: "Opening VS Code…",
+    vsOpened: "VS Code opened with “{P}”. The first time it sets up its server inside the environment: takes a few seconds.",
+    vsMissing: "VS Code is not installed. Download it free at code.visualstudio.com — WiniOS will open your projects in the environment by itself.",
+    vsNoProj: "Create a project first.",
   },
 };
 let lang = localStorage.getItem("winios.lang") || (navigator.language.startsWith("en") ? "en" : "es");
@@ -325,6 +335,12 @@ function renderTopbar() {
   btn.disabled = d.kind !== "linked" || (state.view === "activity" && !!state._runBusy);
   btn.textContent = d.kind === "linked" ? Tf("runWith", { P: activeProject() }) : T("run");
   btn.title = d.kind === "linked" ? "" : chip.title;
+  const vs = $("btn-vscode"), vsLabel = $("btn-vscode-label");
+  if (vs) {
+    vs.disabled = !activeProject();
+    vsLabel.textContent = T("openVscode");
+    vs.title = T("openVscode");
+  }
 }
 
 function renderRail() {
@@ -548,6 +564,7 @@ function vProjects() {
     <input type="radio" name="proj" value="${esc(p)}" ${p === activeProject() ? "checked" : ""} aria-label="${esc(p)}"/>
     <div><div class="name">${esc(p)}</div><div class="meta">SwiftUI · SwiftPM · ~/studio/projects/${esc(p)}</div></div>
     <div class="spacer"></div>
+    <button class="ghost" data-vsc="${esc(p)}" title="${T("openVscode")}">VS Code</button>
     <button class="ghost" data-run="${esc(p)}">${T("projRun")}</button>
   </div>`).join("");
   return `<div class="vhead">
@@ -713,6 +730,7 @@ function wire() {
   };
   $("device-chip").onclick = () => { state.view = "devices"; render(); };
   $("btn-run").onclick = doRun;
+  $("btn-vscode")?.addEventListener("click", () => doOpenVscode());
 
   // Inicio
   $("btn-next")?.addEventListener("click", onNext);
@@ -728,6 +746,10 @@ function wire() {
   document.querySelectorAll("[data-run]").forEach((b) => b.addEventListener("click", () => {
     localStorage.setItem("winios.project", b.dataset.run);
     doRun();
+  }));
+  document.querySelectorAll("[data-vsc]").forEach((b) => b.addEventListener("click", () => {
+    localStorage.setItem("winios.project", b.dataset.vsc);
+    doOpenVscode();
   }));
   document.querySelectorAll('.proj-row input[name="proj"]').forEach((r) => r.addEventListener("change", () => {
     localStorage.setItem("winios.project", r.value);
@@ -875,6 +897,25 @@ async function createProject(name) {
 }
 
 /* ---------- acciones ---------- */
+
+// VS Code: ventana remota wsl+WinIOS apuntando al proyecto. Los ajustes
+// (swift.path) y la recomendación de la extensión Swift ya viven en el
+// proyecto (los deja el motor al crearlo), así que abrir no configura nada.
+async function doOpenVscode() {
+  const project = activeProject();
+  if (!project) { toast(T("vsNoProj"), "err"); return; }
+  toast(T("vsStarting"));
+  try {
+    await invoke("open_vscode", { name: project });
+    toast(Tf("vsOpened", { P: project }), "ok");
+    logLine(`✓ VS Code · ${project}`, "ok");
+  } catch (e) {
+    const msg = String(e);
+    if (msg.includes("VSCODE_MISSING")) toast(T("vsMissing"), "err");
+    else { toast(msg, "err"); logLine(`✗ VS Code · ${msg}`, "err"); }
+  }
+}
+
 async function doRun() {
   if (!state.devices.length) { toast(T("emptyDevices"), "err"); state.view = "devices"; render(); return; }
   const project = activeProject();

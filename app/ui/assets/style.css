@@ -72,6 +72,14 @@ input, textarea, select { caret-color: var(--z2); }
 .dev-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--z4); flex: none; }
 .dev-dot.linked { background: var(--ok); box-shadow: 0 0 0 3px var(--ok-s); }
 .chip-dev.linked .dev-dot { background: var(--ok); box-shadow: 0 0 0 3px var(--ok-s); }
+.chip-code {
+  display: inline-flex; align-items: center; gap: 7px; border-color: transparent; background: transparent;
+  color: var(--z2); min-width: 0; cursor: pointer; white-space: nowrap; flex: none;
+}
+.chip-code:hover { border-color: var(--z6); background: var(--z10); color: var(--z0); }
+.chip-code:disabled { opacity: 45%; cursor: default; }
+.chip-code:hover:not(:disabled) { border-color: var(--z6); background: var(--z10); }
+.chip-code svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 
 button.primary {
   font: inherit; font-weight: 600; padding: 8px 16px; border: none; border-radius: var(--r-ctl);

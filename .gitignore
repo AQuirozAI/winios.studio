@@ -9,4 +9,6 @@ tools/
 
 # builds locales del motor
 target/
+target-*/
+app/src-tauri/gen/
 node_modules/
