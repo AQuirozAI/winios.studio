@@ -267,8 +267,9 @@ async fn new_project(name: String) -> Result<String, String> {
     }
     let out = run_script(&wrap_common(&format!(
         r#"mkdir -p "$WORK/projects"
-if ! test -d "$WORK/projects/{_NAME}"; then "$APP" new "{_NAME}" --skip-setup </dev/null 2>&1; fi
-if test -d "$WORK/projects/{_NAME}"; then printf '@WINIOS:DIR:%s\n' "$WORK/projects/{_NAME}"; else printf '@WINIOS:NO\n'; fi"#,
+cd "$WORK/projects"
+if ! test -d "{_NAME}"; then "$APP" new "{_NAME}" --skip-setup </dev/null 2>&1; fi
+if test -d "{_NAME}"; then printf '@WINIOS:DIR:%s\n' "$WORK/projects/{_NAME}"; else printf '@WINIOS:NO\n'; fi"#,
         _NAME = name
     )));
     if let Some(l) = out.lines().find(|l| l.starts_with("@WINIOS:DIR:")) {
