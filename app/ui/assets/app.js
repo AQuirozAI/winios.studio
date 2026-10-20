@@ -822,6 +822,8 @@ const validClientName = (n) => /^[A-Za-z][A-Za-z0-9_-]*$/.test(n);
 
 /* línea en Actividad (evidencia real del motor, no simulada) */
 function logLine(line, cls) {
+  const es = document.querySelector(".empty-state");
+  if (es) es.remove();
   state.log.push(cls ? { line, cls } : { line });
   if (state.log.length > 900) state.log = state.log.slice(-700);
   const $log = $("log");
@@ -927,12 +929,33 @@ function toast(msg, kind) {
 }
 
 /* ---------- eventos del motor: despliegue ---------- */
+const PH_PROGRESS = /^\[[^\]]+\]\s*\d+\s*%$/;
+
 listen("deploy://line", (ev) => {
   const { line } = ev.payload;
+  // frames de porcentaje van directo a los badges (sin ensuciar el log)
+  if (PH_PROGRESS.test(line.trim())) {
+    refreshPhaseFromLine(line);
+    updatePhasesUI();
+    return;
+  }
   logLine(line, /error|fatal|failed/i.test(line) ? "err" : "");
   if (line.includes("Building") && !state.phases.unpacking) state.phases.unpacking = 1;
   refreshPhaseFromLine(line);
+  updatePhasesUI();
 });
+
+// repinta SOLO la franja de badges — barato, no toca foco ni scroll
+function updatePhasesUI() {
+  if (state.view !== "activity") return;
+  const $ph = document.querySelector(".phases");
+  if (!$ph) return;
+  $ph.innerHTML = PHASE_ORDER.map((p) => {
+    const st = state.phases[p] || 0;
+    const cls = st === 2 ? "done" : st === 1 ? "now" : "";
+    return `<span class="phase ${cls}">${T("phases")[p] || p}</span>`;
+  }).join("");
+}
 
 function refreshPhaseFromLine(line) {
   const l = line.trim();
@@ -947,7 +970,11 @@ function refreshPhaseFromLine(line) {
   const map = [["Unpacking app", "unpacking"], ["Preparing device", "preparing"], ["Provisioning", "provisioning"],
     ["Signing", "signing"], ["Packaging", "packaging"], ["Connecting", "connecting"], ["Installing", "installing"],
     ["Verifying", "verifying"], ["Launching", "launching"]];
-  for (const [frag, ph] of map) if (l.includes(`[${frag}`)) set(ph);
+  for (const [frag, ph] of map) {
+    if (l.includes(`[${frag}`)) set(ph);
+    // "100%" del frame marca la fase como completada (verifying=2 → banner instalado)
+    if (l.includes(`[${frag}]`) && /\b100\s*%\s*$/.test(l)) state.phases[ph] = 2;
+  }
   if (l.includes("Build complete")) { state.phases.unpacking = 2; state.status = "build"; }
   if (l.includes("Installing to device")) state.phases.device_found = 1;
 }

@@ -283,6 +283,35 @@ if test -d "{_NAME}"; then printf '@WINIOS:DIR:%s\n' "$WORK/projects/{_NAME}"; e
         .to_string())
 }
 
+// lector por frames: el progreso de xtool usa \r; cada frame del avance
+// llega a la UI en tiempo real (badges de Actividad vivos)
+fn pump_frames(mut stdout: impl std::io::Read, mut emit: impl FnMut(String)) {
+    use std::io::Read;
+    let mut buf = [0u8; 8192];
+    let mut cur: Vec<u8> = Vec::new();
+    loop {
+        match stdout.read(&mut buf) {
+            Ok(0) => break,
+            Ok(n) => {
+                for &b in &buf[..n] {
+                    if b == b'\n' || b == b'\r' {
+                        if !cur.is_empty() {
+                            emit(String::from_utf8_lossy(&cur).to_string());
+                            cur.clear();
+                        }
+                    } else if b >= 0x20 {
+                        cur.push(b);
+                    }
+                }
+            }
+            Err(_) => break,
+        }
+    }
+    if !cur.is_empty() {
+        emit(String::from_utf8_lossy(&cur).to_string());
+    }
+}
+
 // ---------- difusión de eventos hacia la UI ----------
 
 //   <prefix>://line  { line }          (cada línea legible)
@@ -294,11 +323,10 @@ fn stream_child(app: AppHandle, prefix: &str, mut child: Child, script_text: &st
     let handle = app.clone();
     let prefix = prefix.to_string();
     let _ = std::thread::spawn(move || {
-        let reader = BufReader::new(stdout);
-        for line in reader.lines().flatten() {
-            let txt = line.trim_end_matches('\r').to_string();
-            if txt.is_empty() {
-                continue;
+        let mut stop = false;
+        pump_frames(stdout, |txt| {
+            if stop {
+                return;
             }
             if let Some(rest) = marker(&txt, "STEP") {
                 let mut t = rest.splitn(2, ':');
@@ -308,17 +336,18 @@ fn stream_child(app: AppHandle, prefix: &str, mut child: Child, script_text: &st
                     &format!("{prefix}://step"),
                     serde_json::json!({ "id": id, "state": state }),
                 );
-                continue;
+                return;
             }
             if let Some(rest) = marker(&txt, "DONE").or_else(|| marker(&txt, "EXIT")) {
                 let _ = handle.emit(
                     &format!("{prefix}://done"),
                     serde_json::json!({ "code": rest.trim().to_string() }),
                 );
-                break;
+                stop = true;
+                return;
             }
             let _ = handle.emit(&format!("{prefix}://line"), serde_json::json!({ "line": txt }));
-        }
+        });
         let _ = child.wait();
         // cierre natural (sin marcador DONE): la UI también recibe fin de flujo
         let _ = handle.emit(
@@ -354,13 +383,9 @@ fn auth_login(app: AppHandle, username: String, password: String) -> Result<Stri
     *AUTH_SESS.lock().unwrap() = Some(child);
     let h = app.clone();
     let _ = std::thread::spawn(move || {
-        for line in BufReader::new(stdout).lines().flatten() {
-            let txt = line.trim_end_matches('\r').to_string();
-            if txt.is_empty() {
-                continue;
-            }
+        pump_frames(stdout, |txt| {
             let _ = h.emit("auth://line", serde_json::json!({ "line": txt }));
-        }
+        });
         drop(AUTH_SESS.lock().unwrap().take()); // cierra stdin; PTY termina
         // resultado por evidencia: 'xtool auth status' tras el intento
         let out = run_lines(&wrap_common(
