@@ -26,7 +26,7 @@ jobs:
     name: Windows · release + NSIS
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -61,7 +61,7 @@ jobs:
           "installer=$exe" >> $env:GITHUB_OUTPUT
           "name=$(Split-Path $exe -Leaf)" >> $env:GITHUB_OUTPUT
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: winios-studio-setup
           path: ${{ steps.setup.outputs.installer }}
