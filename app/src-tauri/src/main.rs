@@ -209,6 +209,16 @@ async fn env_status() -> Vec<Check> {
             }
         }
     }
+    if checks.is_empty() {
+        // wsl.exe puede fallar sin escribir CHECKs (p. ej. distro no
+        // registrada): sin este guardia el asistente nunca arranca porque
+        // [] .some(..) es falso. Un entorno vacío ES un entorno roto.
+        return vec![Check {
+            id: "engine".into(),
+            state: "fail".into(),
+            detail: "El entorno aislado WinIOS no responde; hay que prepararlo".into(),
+        }];
+    }
     checks
 }
 
