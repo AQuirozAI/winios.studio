@@ -68,7 +68,6 @@ const I18N = {
     authRetry: "Reintentar",
     authHeads: "xtool usa esta cuenta como equipo de desarrollo (emulación de PC frente a los servicios de Apple). Las credenciales van solo a Apple; considera usar una Apple ID secundaria.",
     authForgot: "¿Olvidaste tu contraseña? appleid.apple.com",
-    authConsole: "Usar la ventana de consola (respaldo)",
     authBack: "Listo",
     authSecured: "Se guarda cifrada en el entorno aislado WinIOS, no en tu Windows.",
     of: "de", stepsReady: "{A} {of} {B} listos",
@@ -87,7 +86,7 @@ const I18N = {
     step_sdk: "SDK de iOS",
     step_sdk_h: "Apple lo publica solo dentro de Xcode.xip: arrastra el archivo y lo instalamos por ti.",
     step_auth: "Apple ID",
-    step_auth_h: "Cualquier Apple ID sirve; abre la ventana y escribe tu sesión una vez.",
+    step_auth_h: "Cualquier Apple ID sirve; se escribe una vez aquí mismo, dentro de la app.",
     step_service: "Servicio Apple en Windows",
     step_service_h: "Apple Mobile Device Support se instala con un solo permiso UAC.",
     step_bridge: "Puente Windows → WSL",
@@ -98,8 +97,8 @@ const I18N = {
     st_manual: "Necesita tu ayuda", st_reboot: "Reinicia Windows y vuelve a abrir",
     wslcoreBtn: "Activar WSL automáticamente",
     wslcoreReboot: "Windows activó WSL — reinicia la computadora y vuelve a abrir WiniOS Studio; todo lo demás se configurará solo.",
-    authBtn: "Abrir sesión con Apple ID",
-    authHint: "Se abrirá una ventana de terminal: escribe tu Apple ID y tu contraseña. Al terminar, este paso se pondrá verde solo.",
+    authBtn: "Iniciar sesión con Apple ID",
+    authHint: "Pulsa Iniciar sesión: escribes tu Apple ID y tu contraseña aquí mismo en la app (y el código si Apple lo pide). Al terminar, este paso se pone verde solo.",
     sdkDrop: "Arrastra aquí tu archivo Xcode.xip",
     sdkOr: "o pega su ruta:",
     sdkInstallBtn: "Instalar SDK desde Xcode.xip",
@@ -176,7 +175,6 @@ const I18N = {
     authRetry: "Try again",
     authHeads: "xtool uses this account as a development device (PC emulation against Apple services). Credentials are only ever sent to Apple; consider using a secondary Apple ID.",
     authForgot: "Forgot your password? appleid.apple.com",
-    authConsole: "Use the console window (fallback)",
     authBack: "Done",
     authSecured: "Stored inside the isolated WinIOS environment, never on Windows.",
     of: "of", stepsReady: "{A} {of} {B} ready",
@@ -195,7 +193,7 @@ const I18N = {
     step_sdk: "iOS SDK",
     step_sdk_h: "Apple only ships the SDK inside Xcode.xip: drop the file here and we install it for you.",
     step_auth: "Apple ID",
-    step_auth_h: "Any Apple ID works; open the window and sign in once.",
+    step_auth_h: "Any Apple ID works; type it once, right here in the app.",
     step_service: "Apple service on Windows",
     step_service_h: "Apple Mobile Device Support installs with a single UAC approval.",
     step_bridge: "Windows → WSL bridge",
@@ -206,8 +204,8 @@ const I18N = {
     st_manual: "Needs your help", st_reboot: "Restart Windows and reopen",
     wslcoreBtn: "Activate WSL automatically",
     wslcoreReboot: "Windows activated WSL — restart the computer and reopen WiniOS Studio; everything else configures itself.",
-    authBtn: "Open Apple ID session",
-    authHint: "A terminal window will open: type your Apple ID and password. When done, this step turns green by itself.",
+    authBtn: "Sign in with Apple ID",
+    authHint: "Press Sign in: you type your Apple ID and password right here in the app (plus the code if Apple asks). When done, this step turns green by itself.",
     sdkDrop: "Drop your Xcode.xip file here",
     sdkOr: "or paste its path:",
     sdkInstallBtn: "Install SDK from Xcode.xip",
@@ -446,8 +444,9 @@ function vHome() {
 const STEP_GLYPH = {
   ok: G.ok, fail: G.fail, warn: G.warn, reboot: G.reboot, pending: G.pending,
 };
-/* tamaños estimados de descarga (MB) para las barras de progreso */
-const STEP_EST = { download: 370, swift: 1024, service: 420 };
+/* tamaños estimados de descarga (MB) para las barras de progreso (reales:
+   Ubuntu rootfs ≈ 340 MB, Swift 6.4.1 ≈ 1073 MB, iTunes ≈ 194 MB) */
+const STEP_EST = { download: 340, swift: 1073, service: 194 };
 
 /* repinta solo la fila del paso con su % de MB — barato en el sondeo de 2s */
 function updateStepPct(id) {
@@ -476,8 +475,7 @@ function stepRow(id) {
   const glyph = st === "running" ? `<span class="spin" style="margin-top:5px" aria-hidden="true"></span>`
     : STEP_GLYPH[st] || G.pending;
   const help = (id === "auth" && st === "manual") ? `<div class="step-help">${T("authHint")}
-      <button class="primary" id="btn-auth-open">${T("authSubmit")}</button>
-      <button class="link" id="btn-auth">${T("authConsole")}</button></div>`
+      <button class="primary" id="btn-auth-open">${T("authSubmit")}</button></div>`
     : (id === "sdk" && st === "manual") ? `<div class="step-help sdk">
         <div class="drop" id="sdk-drop">${T("sdkDrop")}</div>
         <div class="row-actions"><span>${T("sdkOr")}</span>
@@ -634,7 +632,6 @@ function vAuth() {
       <p class="auth-note">${T("authHeads")}</p>
       <p class="auth-note dim2">${T("authSecured")}</p>
       <div class="auth-foot">
-        <button class="link" id="btn-auth">${T("authConsole")}</button>
         <span class="kv">${T("authForgot").split(" ").pop()}</span>
       </div>`
   : a.step === "working" ? `
@@ -656,8 +653,7 @@ function vAuth() {
       <p class="auth-sub">${a.result?.ok ? T("authOkSub") : `<span class="detail">${esc(a.result?.detail || "")}</span>`}</p>
       <div class="auth-foot" style="justify-content:flex-start">
         ${a.result?.ok ? `<button class="auth-btn" id="btn-auth-back">${T("authBack")}</button>`
-          : `<button class="auth-btn" id="btn-auth-retry">${T("authRetry")}</button>
-             <button class="link" id="btn-auth">${T("authConsole")}</button>`}
+          : `<button class="auth-btn" id="btn-auth-retry">${T("authRetry")}</button>`}
       </div>`;
   return `<div class="auth-wrap">
     <div class="auth-card">
@@ -753,14 +749,6 @@ function wire() {
   $("btn-setup-auto")?.addEventListener("click", doSetup);
   $("btn-setup-retry")?.addEventListener("click", doSetup);
   $("btn-go")?.addEventListener("click", () => { state.view = "home"; state.setup.done = "ok"; localStorage.setItem("winios.setupDone", "1"); render(); });
-  $("btn-auth")?.addEventListener("click", async (e) => {
-    e.target.disabled = true;
-    try {
-      await invoke("setup_open_console", { kind: "auth" });
-      toast(T("authHint"));
-    } catch (err) { toast(String(err), "err"); }
-    e.target.disabled = false;
-  });
   $("btn-auth-open")?.addEventListener("click", () => { openAuth(); });
   $("btn-apple-id-row")?.addEventListener("click", () => {
     if (checkById("auth")?.state !== "ok") openAuth("settings");
@@ -1168,9 +1156,12 @@ function pollEnv() {
       const checks = await invoke("env_status");
       if (JSON.stringify(checks) !== JSON.stringify(state.checks)) {
         state.checks = checks;
-        if ($("dlg-new")?.open) { pollEnv.busy = false; return; }
+        // en el asistente el poll se congela MIENTRAS el motor trabaja
+        // (no repintar barras en marcha), pero el resto del ciclo sigue:
+        // así el paso iPhone se pone verde solo al detectar el dispositivo
+        const busy = state.setup.running || Object.values(state.setup.steps).includes("running");
+        if ($("dlg-new")?.open || busy) { pollEnv.busy = false; return; }
         if (document.activeElement?.tagName === "TEXTAREA" || document.activeElement?.tagName === "INPUT") { pollEnv.busy = false; return; }
-        if (state.view === "setup") { pollEnv.busy = false; return; }
         render();
       }
     } catch { /* entorno ausente: el asistente lo gestiona */ }

@@ -1,38 +1,43 @@
-# WiniOS Studio — build para Windows (ejecuta DESDE Windows o from WSL via powershell interop)
-# Requiere: Rust (MSVC) en Windows. Instala tauri-cli prebuilt; empaqueta NSIS.
-# Uso powershell: .\build-windows.ps1
-$ErrorActionPreference = "Stop"
+# WiniOS Studio - build para Windows (desde Windows o WSL via powershell interop)
+#   Rapido y con progreso en vivo: todo el output de cargo/tauri se transmite
+#   tal cual (nada de logs ocultos), el toolchain se comprueba en 1 s y la
+#   compilacion es incremental (target/ persiste entre corridas).
+# Uso:  powershell -ExecutionPolicy Bypass -File .\build-windows.ps1 [-Launch]
+param([switch]$Launch)
+$ErrorActionPreference = "Continue"
 $BuildDir = "C:\Users\Public\winios-build"
 $RepoWsl = "\\wsl.localhost\Ubuntu\home\lex\quirozai\winios.studio"
 
-function Ok($m) { Write-Host "OK  $m" -ForegroundColor Green }
-function Info($m) { Write-Host ">>  $m" -ForegroundColor Cyan }
-function Fail($m) { Write-Host "FALLO  $m" -ForegroundColor Red; exit 1 }
+function Ok($m)  { Write-Host "OK  $m" -ForegroundColor Green }
+function Info($m){ Write-Host ">>  $m" -ForegroundColor Cyan }
+function Fail($m){ Write-Host "FALLO  $m" -ForegroundColor Red; exit 1 }
 
-# 1. Sincronizar fuente desde WSL
-Info "Sincronizando fuente"
-robocopy "$RepoWsl\app" "$BuildDir\app" /E /NFL /NDL /NJH /NJS | Out-Null
+$t0 = Get-Date
+
+# 1. Sincronizar fuente desde WSL (sin target/: el build vive en Windows)
+Info "1/4 Sincronizando fuente (~segundos)"
+robocopy "$RepoWsl\app" "$BuildDir\app" /E /NFL /NDL /NJH /NJS /MT:8 | Out-Null
 if ($LASTEXITCODE -ge 8) { Fail "robocopy fallo ($LASTEXITCODE)" }
 Ok "fuente sincronizada"
 
-# 2. Toolchain: rustc/cargo
-$cargo = (Get-Command cargo -ErrorAction SilentlyContinue)
-if (-not $cargo) {
-  $rustup = "$env:USERPROFILE\.cargo\bin\cargo.exe"
-  if (Test-Path $rustup) { $env:Path += ";$env:USERPROFILE\.cargo\bin"; $cargo = Get-Item $rustup }
+# 2. Toolchain: comprobar; solo instala si falta (sin bloquear en rustup update)
+$cargoOk = $false
+if (Get-Command cargo -ErrorAction SilentlyContinue) { $cargoOk = $true }
+elseif (Test-Path "$env:USERPROFILE\.cargo\bin\cargo.exe") {
+  $env:Path += ";$env:USERPROFILE\.cargo\bin"; $cargoOk = $true
 }
-if (-not ($cargo -and ($cargo.Source -and (Test-Path $cargo.Source)))) {
-  Info "Instalando Rust (rustup, usuario)"
+if (-not $cargoOk) {
+  Info "Instalando Rust (rustup, usuario) - una sola vez"
   Invoke-WebRequest -UseBasicParsing https://win.rustup.rs/x86_64 -OutFile "C:\Users\Public\rustup-init.exe"
   & "C:\Users\Public\rustup-init.exe" -y --default-toolchain stable-msvc | Out-Null
   $env:Path += ";$env:USERPROFILE\.cargo\bin"
 }
 & cargo --version; Ok "Rust listo"
 
-# 3. tauri-cli prebuilt
+# 3. tauri-cli prebuilt (una sola vez)
 $cli = "C:\Users\Public\cargo-tauri.exe"
 if (-not (Test-Path $cli)) {
-  Info "descargando tauri-cli prebuilt"
+  Info "descargando tauri-cli prebuilt - una sola vez"
   Invoke-WebRequest -UseBasicParsing "https://github.com/tauri-apps/tauri/releases/download/tauri-cli-v2.12.3/cargo-tauri-x86_64-pc-windows-msvc.zip" -OutFile "C:\Users\Public\cargo-tauri.zip"
   Expand-Archive -Force "C:\Users\Public\cargo-tauri.zip" "$BuildDir\cli"
   $exe = Get-ChildItem "$BuildDir\cli" -Recurse -Filter "cargo-tauri.exe" | Select-Object -First 1
@@ -40,13 +45,23 @@ if (-not (Test-Path $cli)) {
 }
 & $cli --version; Ok "tauri-cli listo"
 
-# 4. Build release + bundle NSIS (native stderr se escribe a log, no rompe el script)
+# 4. Build release + bundle NSIS con progreso EN VIVO (cada linea Compiling…)
+Info "4/4 Compilando release + NSIS (progreso en vivo)"
 Push-Location "$BuildDir\app\src-tauri"
-$p = Start-Process -FilePath $cli -ArgumentList "build" -NoNewWindow -Wait -PassThru `
-  -RedirectStandardOutput "$BuildDir\build-out.log" -RedirectStandardError "$BuildDir\build-err.log"
-Pop-Location
-Write-Host ("tauri build exit=" + $p.ExitCode)
-Get-Content "$BuildDir\build-err.log" -Tail 12 -ErrorAction SilentlyContinue
-if ($p.ExitCode -ne 0) { Write-Host ("ULTIMAS LINEAS DE STDOUT:"); Get-Content "$BuildDir\build-out.log" -Tail 20 -ErrorAction SilentlyContinue; exit $p.ExitCode }
-Ok "Build completa. Artefactos:"
-Get-ChildItem "$BuildDir\app\src-tauri\target\release\bundle\nsis" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host ("  bundle: " + $_.FullName) }
+try {
+  & $cli build 2>&1 | ForEach-Object { Write-Host "    $_" }
+  if ($LASTEXITCODE -ne 0) { Fail "tauri build exit=$LASTEXITCODE" }
+}
+finally { Pop-Location }
+
+$nsis = "$BuildDir\app\src-tauri\target\release\bundle\nsis"
+if (-not (Test-Path "$nsis")) { Fail "sin bundle NSIS" }
+$setup = (Get-ChildItem $nsis -Filter "*-setup.exe" | Select-Object -First 1).FullName
+Copy-Item $setup "$RepoWsl\dist\" -Force
+Ok "instalador copiado a dist\ del repo"
+Ok ("build completa en {0:n0} s" -f ((Get-Date) - $t0).TotalSeconds)
+
+if ($Launch) {
+  Info "lanzando WiniOS Studio"
+  Start-Process "$BuildDir\app\src-tauri\target\release\winios-studio.exe"
+}

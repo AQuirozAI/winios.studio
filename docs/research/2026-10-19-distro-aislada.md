@@ -27,7 +27,11 @@ Los scripts ya no se pasan como argumento en línea, nunca más.
 ### 3. Aprovisionamiento automático (botón único del asistente)
 `setup_run` orchestration en un hilo de Rust, con eventos `setup://step`,
 `setup://line`, `setup://done`:
-1. `wslcore`  — verifica `wsl --status`; si falta → `--install --no-distribution`
+1. `wslcore`  — verifica `wsl --status`; si falta → `wsl --install
+               --no-distribution --web-download`; si aún falla → script
+               elevado OCULTO con `dism` (features sin reinicio) + MSI
+               oficial del repo microsoft/WSL (GitHub, sin Store) y
+               veredicto OK/REBOOT en `$LOCALAPPDATA\WiniOS\wsl-setup-log.txt`
 2. `distro`   — `ensure_distro()`: probe de usuario, descarga rootfs con
                `curl.exe` (progreso por tamaño de archivo), `wsl --import`,
                creación del usuario, `--terminate` y verificación.
@@ -37,8 +41,9 @@ Los scripts ya no se pasan como argumento en línea, nunca más.
 6. proyecto demo `WinizHello` si no hay proyectos
 7. `sdk`      — comprobación; si falta → **paso interactivo** (arrastrar
                Xcode.xip en la app → `sdk_install`)
-8. `auth`     — comprobación; si falta → **paso interactivo** (consola visible
-               vía `setup_open_console("auth")` → `xtool auth login`)
+8. `auth`     — comprobación; si falta → **paso interactivo en la UI**
+               (vista auth de la app → `auth_login`/`auth_feed`;
+               sin ventanas de consola)
 9. `service`+`bridge` — iTunes64Setup + 7z + **un solo UAC**
                (`winios-setup.ps1`: msiexec + Start-Service + portproxy + firewall),
                luego verificación con `sc.exe` y `/dev/tcp` probe.

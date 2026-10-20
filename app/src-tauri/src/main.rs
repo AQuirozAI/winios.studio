@@ -1,3 +1,4 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 // WiniOS Studio — motor v0.2
 // Toda operación técnica vive aquí; la UI nunca genera comandos libres.
 //
@@ -8,9 +9,12 @@
 //     %LOCALAPPDATA%\WiniOS.
 //   · Los scripts SIEMPRE entran por stdin: wsl.exe corrompe los "$VAR"/"$(...)"
 //     de los comandos en línea (causa raíz del "Bloqueado" de v0.1).
-//   · El asistente provisiona TODO automáticamente: WSL core → distro aislada
-//     → dependencias + Swift → xtool → SDK/sesión Apple (guiado) → servicio
-//     Apple + puente TCP (un solo UAC) → iPhone (enchufar).
+//   · El asistente provisiona TODO automáticamente y 100% dentro de la app:
+//     núcleo WSL → distro aislada → dependencias + Swift → xtool → SDK/sesión
+//     Apple (en la propia UI, sin ventanas de terminal) → servicio Apple +
+//     puente TCP (un solo UAC oculto) → iPhone (enchufar).
+//   · NO hay consolas: ni respaldo de terminal ni ventana visible para el
+//     Apple ID. Todo el flujo es la UI (auth_login + auth_feed).
 
 use serde::Serialize;
 use std::io::{BufRead, BufReader, Write};
@@ -39,8 +43,8 @@ export PATH="/opt/swift/usr/bin:$HOME/.local/bin:$PATH"
 
 // ---------- transporte de scripts hacia WSL (stdin, inmune al mangling) ----------
 
-// sin parpadeo de consola: todo proceso de Windows que lanza el motor va
-// oculto, salvo la consola visible y deseada para el Apple ID (setup_open_console)
+// sin parpadeo de consola: TODO proceso de Windows que lanza el motor va
+// oculto — la app es solo la UI, nunca una terminal
 fn hide_console(mut c: Command) -> Command {
     #[cfg(windows)]
     {
@@ -113,27 +117,6 @@ fn wrap_common(body: &str) -> String {
     format!("{}\n{}\n", COMMON, body)
 }
 
-// ---------- runner interactivo: consola visible para el login con Apple ID ----------
-
-const RUNNER_BLOCK: &str = r#"
-WINIOS_RUNNER="$HOME/.winios/runner.sh"
-mkdir -p "$HOME/.winios"
-cat > "$WINIOS_RUNNER" <<'RUNEOF'
-#!/usr/bin/env bash
-export PATH="/opt/swift/usr/bin:$HOME/.local/bin:$PATH"
-export USBMUXD_SOCKET_ADDRESS="$(ip route list default 2>/dev/null | awk '{print $3}'):27015"
-APP="$HOME/studio/tools/xtool/xtool.AppImage"
-test -x "$APP" || APP="/usr/local/bin/xtool"
-case "${1:-help}" in
-  auth)
-    echo "Inicia sesión con tu Apple ID (cualquier Apple ID sirve; las apps de cuentas gratis caducan en 7 días)."
-    exec "$APP" auth login ;;
-  *) echo "uso: runner.sh auth" ;;
-esac
-RUNEOF
-chmod +x "$WINIOS_RUNNER"
-"#;
-
 // ---------- env_status: todo en UN script, parseado por marcadores ----------
 
 const ENV_SCRIPT: &str = r#"
@@ -198,7 +181,7 @@ fi
 
 #[tauri::command]
 async fn env_status() -> Vec<Check> {
-    let out = run_lines(&wrap_common(&format!("{}\n{}\n", RUNNER_BLOCK, ENV_SCRIPT)));
+    let out = run_lines(&wrap_common(ENV_SCRIPT));
     let Ok(lines) = out else {
         return vec![Check {
             id: "engine".into(),
@@ -318,7 +301,6 @@ fn pump_frames(
     mut stdout: impl std::io::Read + Send + 'static,
     mut emit: impl FnMut(String),
 ) {
-    use std::io::Read;
     use std::sync::mpsc;
     use std::time::Duration;
     // lector dedicado: read() bloqueante no ofrece timeout, así que los
@@ -418,7 +400,6 @@ fn auth_login(app: AppHandle, username: String, password: String) -> Result<Stri
     if AUTH_SESS.lock().unwrap().is_some() {
         return Err("ya hay una sesión de inicio en curso".into());
     }
-    run_script(RUNNER_BLOCK);
     let u = username.replace('\'', "'\\''");
     let p = password.replace('\'', "'\\''");
     let mut child = spawn_wsl(WUSER)?;
@@ -535,6 +516,130 @@ printf '@WINIOS:EXIT:%s\n' "$?""#,
 
 // ---------- instalación automática en un clic ----------
 
+// núcleo WSL: activación Automática con CAMINOS PROGRESIVOS. Investigado
+// (docs.microsoft.com/windows/wsl/install e install-manual + issues de
+// microsoft/WSL): `wsl --install` pide elevación por sí solo en builds
+// actuales, pero falla silenciosamente en equipos donde la elevación no
+// llega, en inbox builds viejas sin las banderas nuevas (--no-distribution/
+// --web-download) y en Windows sin Microsoft Store. Por eso el paso 2 es un
+// script elevado OCULTO que habilita las características de Windows con dism
+// (sin reinicio) e instala el MSI oficial del repo de microsoft/WSL en GitHub.
+enum WslCore {
+    Ready,
+    Reboot,
+    Fail(String),
+}
+
+fn wsl_status_ok() -> bool {
+    hide_console(Command::new("wsl.exe"))
+        .args(["--status"])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+const WSL_SETUP_PS1: &str = r#"
+$log = 'C:\LATOKEN\WiniOS\wsl-setup-log.txt'
+"== WinIOS WSL core $(Get-Date -Format s) ==" | Out-File $log -Encoding utf8
+dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart | Out-Null
+"dism-wsl:$LASTEXITCODE" | Out-File $log -Append -Encoding utf8
+dism.exe /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart | Out-Null
+"dism-vmp:$LASTEXITCODE" | Out-File $log -Append -Encoding utf8
+# subsistema activado pero wsl.exe moderno ausente: el MSI del repo oficial
+# de Microsoft (GitHub) es la vía fiable sin Microsoft Store
+$msi = 'C:\LATOKEN\WiniOS\wsl.msi'
+try {
+  $rel = Invoke-RestMethod -Uri 'https://api.github.com/repos/microsoft/WSL/releases/latest' -UseBasicParsing
+  $arch = 'x64'
+  if (-not [Environment]::Is64BitOperatingSystem) { $arch = 'arm64' }
+  $asset = $rel.assets | Where-Object { $_.name -like ('wsl.*' + $arch + '.msi') } | Select-Object -First 1
+  if ($asset) {
+    $ProgressPreference = 'SilentlyContinue'
+    Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $msi -UseBasicParsing
+    Start-Process msiexec -ArgumentList '/i',$msi,'/qn','/norestart' -Wait
+    "msi: $($asset.name) instalado" | Out-File $log -Append -Encoding utf8
+  } else {
+    "msi: paquete $arch no encontrado en la última release" | Out-File $log -Append -Encoding utf8
+  }
+} catch {
+  "msi: $($_.Exception.Message)" | Out-File $log -Append -Encoding utf8
+}
+if (-not (Get-Command wsl.exe -ErrorAction SilentlyContinue)) {
+  'WINIOS:WSL-MISSING' | Out-File $log -Append -Encoding utf8
+  exit
+}
+& wsl.exe --status | Out-Null
+if ($LASTEXITCODE -eq 0) {
+  'WINIOS:WSL-OK' | Out-File $log -Append -Encoding utf8
+} else {
+  'WINIOS:WSL-REBOOT' | Out-File $log -Append -Encoding utf8
+  "status=$LASTEXITCODE" | Out-File $log -Append -Encoding utf8
+}
+"#;
+
+fn ensure_wsl_core(app: &AppHandle) -> WslCore {
+    if wsl_status_ok() {
+        return WslCore::Ready;
+    }
+    // camino 1: wsl --install (se autoeleva con UAC en builds actuales)
+    emit_line(app, "activando la plataforma WSL (Windows puede pedir permiso)…");
+    match hide_console(Command::new("wsl.exe"))
+        .args(["--install", "--no-distribution", "--web-download"])
+        .output()
+    {
+        Ok(o) if o.status.success() && wsl_status_ok() => return WslCore::Ready,
+        _ => {}
+    }
+    // camino 2: respaldo elevado oculto (dism + MSI oficial de GitHub)
+    emit_line(app, "configurando la plataforma WSL con permisos de Windows (acepta el UAC)…");
+    let base = match std::env::var("LOCALAPPDATA")
+        .map(|d| format!(r"{d}\WiniOS"))
+        .map_err(|_| "no se resolvió LOCALAPPDATA".to_string())
+    {
+        Ok(b) => b,
+        Err(e) => return WslCore::Fail(e),
+    };
+    if let Err(e) = std::fs::create_dir_all(&base) {
+        return WslCore::Fail(e.to_string());
+    }
+    let ps = format!(r"{base}\wsl-setup.ps1");
+    let script = WSL_SETUP_PS1.replace(r"C:\LATOKEN\WiniOS", &base);
+    if let Err(e) = std::fs::write(&ps, &script) {
+        return WslCore::Fail(e.to_string());
+    }
+    let ps_solo = ps.clone();
+    let run = hide_console(Command::new("powershell.exe"))
+        .args([
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            &format!(
+                "Start-Process powershell -Verb RunAs -Wait -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-WindowStyle','Hidden','-File','{ps_solo}'"
+            ),
+        ])
+        .output();
+    if let Err(e) = run {
+        return WslCore::Fail(format!("no se pudo lanzar el respaldo elevado de WSL: {e}"));
+    }
+    let log = format!(r"{base}\wsl-setup-log.txt");
+    let verdict = std::fs::read_to_string(&log).unwrap_or_default();
+    if verdict.contains("WINIOS:WSL-OK") {
+        WslCore::Ready
+    } else if verdict.contains("WINIOS:WSL-REBOOT") {
+        emit_line(app, "Windows activó WSL — hay que reiniciar para terminarlo.");
+        WslCore::Reboot
+    } else if verdict.contains("WINIOS:WSL-MISSING") {
+        WslCore::Fail("wsl.exe no existe en este Windows; actualiza Windows e inténtalo de nuevo".into())
+    } else {
+        let tail = verdict.lines().rev().take(4).collect::<Vec<_>>().join(" · ");
+        WslCore::Fail(format!(
+            "WSL no se pudo activar; evidencia: {}",
+            if tail.is_empty() { "sin registro (¿se rechazó el UAC?)" } else { &tail }
+        ))
+    }
+}
+
 // Fase 1 (Rust): distro aislada — no toca ninguna distribución del usuario.
 fn ensure_distro(app: &AppHandle) -> Result<(), String> {
     // ¿la distro ya está lista (usuario winios accesible)?
@@ -556,23 +661,15 @@ fn ensure_distro(app: &AppHandle) -> Result<(), String> {
         emit_line(app, "La distro aislada WinIOS estaba incompleta — reinstalando…");
         let _ = hide_console(Command::new("wsl.exe")).args(["--unregister", DISTRO]).output();
     }
-    emit_line(app, "activando la plataforma WSL (Windows puede pedir permiso)…");
-    let act = hide_console(Command::new("wsl.exe"))
-        .args(["--install", "--no-distribution", "--web-download"])
-        .output()
-        .map_err(|e| format!("no se pudo activar WSL: {e}"))?;
-    let txt = format!(
-        "{}{}",
-        String::from_utf8_lossy(&act.stdout),
-        String::from_utf8_lossy(&act.stderr)
-    )
-    .to_lowercase();
-    if txt.contains("reboot") || txt.contains("reiniciar") || txt.contains("restart") {
-        emit_step(app, "distro", "reboot");
-        return Err("Windows necesita un reinicio para terminar de activar WSL. Reinicia y abre WiniOS Studio de nuevo — continuará solo.".into());
-    }
-    if !act.status.success() {
-        return Err(txt.lines().last().unwrap_or("WSL no se pudo activar").to_string());
+    // el núcleo WSL se garantiza con caminos progresivos (wsl --install →
+    // dism + MSI elevado); sin reinicio no se continúa
+    match ensure_wsl_core(app) {
+        WslCore::Ready => {}
+        WslCore::Reboot => {
+            emit_step(app, "distro", "reboot");
+            return Err("Windows necesita un reinicio para terminar de activar WSL. Reinicia y abre WiniOS Studio de nuevo — continuará solo.".into());
+        }
+        WslCore::Fail(e) => return Err(e),
     }
 
     // descarga del rootfs oficial de Ubuntu 24.04 (solo lectura, aislado)
@@ -586,7 +683,7 @@ fn ensure_distro(app: &AppHandle) -> Result<(), String> {
     std::fs::create_dir_all(&distro_dir).map_err(|e| e.to_string())?;
 
     if !std::path::Path::new(&rootfs).exists() {
-        emit_line(app, "descargando Ubuntu 24.04 aislado (~370 MB, una sola vez)…");
+        emit_line(app, "descargando Ubuntu 24.04 aislado (~340 MB, una sola vez)…");
         emit_step(app, "download", "running");
         let mut dl = hide_console(Command::new("curl.exe"))
             .args(["-fL", "--retry", "3", ROOTFS_URL, "-o", &rootfs])
@@ -812,25 +909,34 @@ $log = 'C:\Users\Public\winios-setup-log.txt'
 $msi = 'C:\Users\Public\AppleMobileDeviceSupport64.msi'
 $srv = 'C:\Program Files\Common Files\Apple\Mobile Device Support\AppleMobileDeviceService.exe'
 "== WinIOS setup $(Get-Date -Format s) ==" | Out-File $log -Encoding utf8
-if ((Test-Path $msi) -and -not (Test-Path $srv)) {
-  Start-Process msiexec -ArgumentList '/i',$msi,'/qn','/norestart' -Wait
-  "msi instalado" | Out-File $log -Append -Encoding utf8
+if (Test-Path $msi) {
+  if (-not (Test-Path $srv)) {
+    Start-Process msiexec -ArgumentList '/i',$msi,'/qn','/norestart' -Wait
+    "msi instalado" | Out-File $log -Append -Encoding utf8
+    Start-Sleep -Seconds 2
+  }
+} else {
+  "msi ausente" | Out-File $log -Append -Encoding utf8
 }
-  Start-Sleep -Seconds 2
-}
+# el servicio a veces queda detenido tras la instalación: garantía de arranque
 Get-Service 'Apple Mobile Device Service' -ErrorAction SilentlyContinue | ForEach-Object {
   Set-Service $_.Name -StartupType Automatic -ErrorAction SilentlyContinue
   if ($_.Status -ne 'Running') { Start-Service $_.Name -ErrorAction SilentlyContinue }
 }
-Stop-Process -Name 'AppleMobileDeviceProcess','AppleMobileDeviceLauncher' -Force -ErrorAction SilentlyContinue
 if ($gw) {
   netsh interface portproxy delete v4tov4 listenaddress=$gw listenport=27015 2>$null | Out-Null
   netsh interface portproxy add v4tov4 listenaddress=$gw listenport=27015 connectaddress=127.0.0.1 connectport=27015 2>$null | Out-Null
   netsh advfirewall firewall delete rule name="Winios27015-in" 2>$null | Out-Null
   netsh advfirewall firewall add rule name="Winios27015-in" dir=in action=allow protocol=TCP localport=27015 remoteip=172.16.0.0/12 2>$null | Out-Null
 }
+$retry = Get-Service 'Apple Mobile Device Service' -ErrorAction SilentlyContinue
+if ($retry -and $retry.Status -ne 'Running') {
+  Start-Sleep -Seconds 3
+  $retry.Refresh()
+  if ($retry.Status -ne 'Running') { Start-Service $retry.Name -ErrorAction SilentlyContinue }
+}
 $s = Get-Service 'Apple Mobile Device Service' -ErrorAction SilentlyContinue
-"srv-exists: $(if ($s) { $s.Status } else { 'False' })" | Out-File $log -Append -Encoding utf8
+"srv: $(if ($s) { $s.Status } else { 'ausente' })" | Out-File $log -Append -Encoding utf8
 if ($gw) { "portproxy: $((netsh interface portproxy show all | Out-String))" | Out-File $log -Append -Encoding utf8 }
 PS1EOF
   sed -i "1s|@GW@|$GW|" /mnt/c/Users/Public/winios-setup.ps1
@@ -852,30 +958,26 @@ printf '@WINIOS:DONE:0\n'
 fn setup_run(app: AppHandle) -> Result<String, String> {
     let h = app.clone();
     let _ = std::thread::spawn(move || {
-        // ¿WSL (el subsistema, no distribuciones) está activo?
-        let core = hide_console(Command::new("wsl.exe")).args(["--status"]).output();
-        if !core.map(|o| o.status.success()).unwrap_or(false) {
-            // intentar activarlo sin crear distribuciones del usuario
-            let act = hide_console(Command::new("wsl.exe"))
-                .args(["--install", "--no-distribution", "--web-download"])
-                .output();
-            match act {
-                Ok(o) if o.status.success() => {}
-                _ => {
-                    emit_step(&h, "wslcore", "manual");
-                    return;
-                }
+        // ¿WSL (el subsistema, no distribuciones) está activo? / activación
+        // progresiva: wsl --install y, si falla, script elevado con dism+MSI
+        emit_step(&h, "wslcore", "running");
+        match ensure_wsl_core(&h) {
+            WslCore::Ready => emit_step(&h, "wslcore", "ok"),
+            WslCore::Reboot => {
+                emit_step(&h, "wslcore", "reboot");
+                return;
+            }
+            WslCore::Fail(e) => {
+                emit_line(&h, &e);
+                emit_step(&h, "wslcore", "fail");
+                return;
             }
         }
         emit_step(&h, "distro", "running");
         match ensure_distro(&h) {
             Ok(()) => {
                 emit_step(&h, "distro", "ok");
-                let script_text = wrap_common(&format!(
-                    "{}\n{}\n",
-                    RUNNER_BLOCK,
-                    SETUP_SCRIPT.replace("__SWIFT_VER__", SWIFT_VERSION)
-                ));
+                let script_text = wrap_common(SETUP_SCRIPT.replace("__SWIFT_VER__", SWIFT_VERSION).as_str());
                 match spawn_wsl(WUSER) {
                     Ok(child) => stream_child(h, "setup", child, &script_text),
                     Err(_) => {
@@ -935,47 +1037,29 @@ printf '@WINIOS:DONE:%s\n' "$RC""#,
     Ok("started".into())
 }
 
-// Abre una ventana de consola visible para el paso que pide tu entrada: auth (Apple ID)
-#[tauri::command]
-fn setup_open_console(kind: String) -> Result<String, String> {
-    // garantizar el runner aunque el asistente aún no haya corrido
-    run_script(RUNNER_BLOCK);
-    let runner = format!("/home/{WUSER}/.winios/runner.sh");
-    Command::new("cmd.exe")
-        .args(["/C", "start", "WiniOS Studio", "wsl.exe", "-d", DISTRO, "-u", WUSER, "--", "bash", &runner, &kind])
-        .spawn()
-        .map_err(|e| format!("no se pudo abrir la consola: {e}"))?;
-    Ok("opened".into())
-}
+// (antes: consola visible para la sesión Apple ID — retirado: el flujo de
+// Apple ID vive 100% dentro de la UI con auth_login/auth_feed)
 
-// El núcleo WSL de Windows no está activo: activarlo lo exige Windows con UAC/reinicio
+// El núcleo WSL de Windows no está activo: activarlo lo exige Windows. La UI
+// llama aquí desde el botón del paso wslcore y la activación es la misma
+// progresiva del asistente (wsl --install → dism+MSI elevado).
 #[tauri::command]
-fn setup_distro() -> Result<String, String> {
-    let probe = hide_console(Command::new("wsl.exe")).args(["--status"]).output();
-    if probe.map(|o| o.status.success()).unwrap_or(false) {
+fn setup_distro(app: AppHandle) -> Result<String, String> {
+    if wsl_status_ok() {
         return Ok("ready".into());
     }
-    let out = hide_console(Command::new("wsl.exe"))
-        .args(["--install", "--no-distribution"])
-        .output()
-        .map_err(|e| format!("no se pudo lanzar wsl --install: {e}"))?;
-    let txt = format!(
-        "{}{}",
-        String::from_utf8_lossy(&out.stdout),
-        String::from_utf8_lossy(&out.stderr)
-    )
-    .to_lowercase();
-    if !out.status.success() {
-        return Err(txt.lines().last().unwrap_or("WSL no se pudo activar").to_string());
+    match ensure_wsl_core(&app) {
+        WslCore::Ready => Ok("ready".into()),
+        WslCore::Reboot => Ok("reboot".into()),
+        WslCore::Fail(e) => Err(e),
     }
-    Ok("reboot".into())
 }
 
 fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             env_status, device_list, projects, new_project, run_project,
-            setup_run, sdk_install, setup_open_console, setup_distro,
+            setup_run, sdk_install, setup_distro,
             auth_login, auth_feed, auth_close
         ])
         .run(tauri::generate_context!())

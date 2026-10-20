@@ -50,10 +50,40 @@ $global:LASTEXITCODE = 1
 if ($LASTEXITCODE -ne 0) {
     Info "WSL no esta activo: activandolo (Windows puede pedir permisos y reinicio)"
     & wsl.exe --install --no-distribution --web-download
-    $global:LASTEXITCODE = 1
     & wsl.exe --status 2>$null | Out-Null
     if ($LASTEXITCODE -ne 0) {
-        Fail "Reinicia Windows para terminar de activar WSL y vuelve a ejecutar este instalador."
+        # respaldo automatico: dism (features sin reinicio) + MSI oficial
+        # del repo microsoft/WSL en GitHub, todo en una elevacion UAC oculta
+        Info "wsl --install no basto: configurando con dism + MSI oficial (acepta el UAC)"
+        $BaseDir2 = Join-Path $env:LOCALAPPDATA "WiniOS"
+        New-Item -ItemType Directory -Force -Path $BaseDir2 | Out-Null
+        $wslPs1 = Join-Path $BaseDir2 "wsl-setup.ps1"
+        @'
+$log = Join-Path $env:LOCALAPPDATA 'WiniOS\wsl-setup-log.txt'
+"== WinIOS WSL core $(Get-Date -Format s) ==" | Out-File $log -Encoding utf8
+dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart | Out-Null
+dism.exe /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart | Out-Null
+$msi = Join-Path $env:LOCALAPPDATA 'WiniOS\wsl.msi'
+try {
+  $rel = Invoke-RestMethod -Uri 'https://api.github.com/repos/microsoft/WSL/releases/latest' -UseBasicParsing
+  $arch = if ([Environment]::Is64BitOperatingSystem) { 'x64' } else { 'arm64' }
+  $asset = $rel.assets | Where-Object { $_.name -like ('wsl.*' + $arch + '.msi') } | Select-Object -First 1
+  if ($asset) {
+    $ProgressPreference = 'SilentlyContinue'
+    Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $msi -UseBasicParsing
+    Start-Process msiexec -ArgumentList '/i',$msi,'/qn','/norestart' -Wait
+    "msi: $($asset.name) instalado" | Out-File $log -Append -Encoding utf8
+  }
+} catch { "msi: $($_.Exception.Message)" | Out-File $log -Append -Encoding utf8 }
+& wsl.exe --status 2>$null | Out-Null
+if ($LASTEXITCODE -eq 0) { 'WINIOS:WSL-OK' | Out-File $log -Append -Encoding utf8 }
+else { 'WINIOS:WSL-REBOOT' | Out-File $log -Append -Encoding utf8 }
+'@ | Set-Content $wslPs1 -Encoding ASCII -NoNewline
+        Start-Process powershell -Verb RunAs -Wait -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-WindowStyle','Hidden','-File',$wslPs1
+        & wsl.exe --status 2>$null | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            Fail "Reinicia Windows para terminar de activar WSL y vuelve a ejecutar este instalador."
+        }
     }
 }
 Ok "Plataforma WSL activa"
@@ -184,7 +214,11 @@ Get-Service 'Apple Mobile Device Service' -ErrorAction SilentlyContinue | ForEac
   Set-Service `$_.Name -StartupType Automatic -ErrorAction SilentlyContinue
   if (`$_.Status -ne 'Running') { Start-Service `$_.Name -ErrorAction SilentlyContinue }
 }
-Stop-Process -Name 'AppleMobileDeviceProcess','AppleMobileDeviceLauncher' -Force -ErrorAction SilentlyContinue
+`$retry = Get-Service 'Apple Mobile Device Service' -ErrorAction SilentlyContinue
+if (`$retry -and `$retry.Status -ne 'Running') {
+  Start-Sleep -Seconds 3; `$retry.Refresh()
+  if (`$retry.Status -ne 'Running') { Start-Service `$retry.Name -ErrorAction SilentlyContinue }
+}
 if (`$gw) {
   netsh interface portproxy delete v4tov4 listenaddress=`$gw listenport=27015 2>`$null | Out-Null
   netsh interface portproxy add v4tov4 listenaddress=`$gw listenport=27015 connectaddress=127.0.0.1 connectport=27015 | Out-Null
