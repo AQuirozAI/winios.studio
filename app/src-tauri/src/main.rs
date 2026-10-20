@@ -295,15 +295,42 @@ if test -d "{_NAME}"; then printf '@WINIOS:DIR:%s\n' "$WORK/projects/{_NAME}"; e
 
 // lector por frames: el progreso de xtool usa \r; cada frame del avance
 // llega a la UI en tiempo real (badges de Actividad vivos)
+// prompts in-PTY tipo "Code: " no traen salto de línea; sin esto el texto
+// queda atrapado en el buffer interno y la UI nunca pide el código 2FA
+fn flush_prompt(cur: &mut Vec<u8>, emit: &mut dyn FnMut(String)) {
+    let last = cur.iter().rev().find(|&&b| b != b' ').copied();
+    if !cur.is_empty() && (last == Some(b':') || last == Some(b'?')) {
+        emit(String::from_utf8_lossy(cur).to_string());
+        cur.clear();
+    }
+}
+
 fn pump_frames(mut stdout: impl std::io::Read, mut emit: impl FnMut(String)) {
     use std::io::Read;
-    let mut buf = [0u8; 8192];
+    use std::sync::mpsc;
+    use std::time::Duration;
+    // lector dedicado: read() bloqueante no ofrece timeout, así que los
+    // bytes viajan por un canal y aquí decidimos cuándo emitir
+    let (tx, rx) = mpsc::channel::<Vec<u8>>();
+    let reader = std::thread::spawn(move || {
+        let mut buf = [0u8; 8192];
+        loop {
+            match stdout.read(&mut buf) {
+                Ok(0) => break,
+                Ok(n) => {
+                    if tx.send(buf[..n].to_vec()).is_err() {
+                        break;
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+    });
     let mut cur: Vec<u8> = Vec::new();
     loop {
-        match stdout.read(&mut buf) {
-            Ok(0) => break,
-            Ok(n) => {
-                for &b in &buf[..n] {
+        match rx.recv_timeout(Duration::from_millis(400)) {
+            Ok(chunk) => {
+                for &b in &chunk {
                     if b == b'\n' || b == b'\r' {
                         if !cur.is_empty() {
                             emit(String::from_utf8_lossy(&cur).to_string());
@@ -313,13 +340,16 @@ fn pump_frames(mut stdout: impl std::io::Read, mut emit: impl FnMut(String)) {
                         cur.push(b);
                     }
                 }
+                flush_prompt(&mut cur, &mut emit);
             }
-            Err(_) => break,
+            Err(mpsc::RecvTimeoutError::Timeout) => flush_prompt(&mut cur, &mut emit),
+            Err(mpsc::RecvTimeoutError::Disconnected) => break,
         }
     }
     if !cur.is_empty() {
         emit(String::from_utf8_lossy(&cur).to_string());
     }
+    let _ = reader.join();
 }
 
 // ---------- difusión de eventos hacia la UI ----------
