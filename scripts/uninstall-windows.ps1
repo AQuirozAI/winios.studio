@@ -41,6 +41,22 @@ Info "terminating distro $WslDist (other distros keep running)..."
 & wsl.exe --terminate $WslDist 2>$null | Out-Null
 
 # ---------- 2. unregister ONLY WinIOS ----------
+# el backup de la sesion Apple ID SIEMPRE antes, leyendo directo de la
+# distro (el espejo en temp\xtool-config puede no existir aun). Pipe de
+# binarios por cmd: el pipeline de powershell corrompe bytes.
+if (-not $RemoveAppleID -and ((wsl.exe -l -q 2>$null) -split "`n") -contains $WslDist) {
+    $tmpx = "$env:TEMP\winios-xtool-bak"
+    Remove-Item $tmpx -Recurse -Force -ErrorAction SilentlyContinue
+    New-Item -ItemType Directory -Force -Path $tmpx | Out-Null
+    cmd /c "wsl.exe -d $WslDist -u winios -- tar -C /home/winios -cf - .config/xtool 2>nul | tar.exe -xf - -C `"$tmpx`""
+    if (Test-Path "$tmpx\.config\xtool") {
+        New-Item -ItemType Directory -Force -Path $AuthBak | Out-Null
+        Remove-Item "$AuthBak\xtool-config" -Recurse -Force -ErrorAction SilentlyContinue
+        Move-Item "$tmpx\.config\xtool" "$AuthBak\xtool-config" -Force
+        Ok "Apple ID session backed up at $AuthBak\xtool-config (reinstall reuses it)"
+    }
+    Remove-Item $tmpx -Recurse -Force -ErrorAction SilentlyContinue
+}
 Info "unregistering distro $WslDist..."
 & wsl.exe -d $WslDist -- whoami 2>$null | Out-Null
 if ($LASTEXITCODE -eq 0) {

@@ -160,6 +160,15 @@ fi
 
 if "$APP" auth status 2>/dev/null | head -1 | grep -qi 'Logged in'; then
   say auth ok "Apple ID conectado"
+  # espejo del token en Windows: si el usuario desinstala con la sesión
+  # conservada, el respaldo del desinstalador vive aquí — el vhdx desaparece
+  # con la distro (sin este espejo, --unregister borra también tu sesión)
+  WINBASE=$(ls -d /mnt/c/Users/*/AppData/Local/WiniOS 2>/dev/null | head -1)
+  if [ -n "$WINBASE" ] && test -d "$HOME/.config/xtool"; then
+    mkdir -p "$WINBASE/temp"
+    rm -rf "$WINBASE/temp/xtool-config"
+    cp -r "$HOME/.config/xtool" -T "$WINBASE/temp/xtool-config" 2>/dev/null
+  fi
 else
   say auth fail "Inicio de sesión con Apple ID pendiente"
 fi
