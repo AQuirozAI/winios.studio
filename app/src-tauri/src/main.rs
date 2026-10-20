@@ -664,11 +664,21 @@ VX="$("$APP" --version 2>/dev/null | head -1)"
 if test -n "$VX"; then
   mkdir -p "$HOME/.local/bin"
   printf '#!/usr/bin/env bash\nexport USBMUXD_SOCKET_ADDRESS="$(ip route list default | awk '\''{print $3}'\''):27015"\nexec %s "$@"\n' "$APP" > "$HOME/.local/bin/xtool"
+  chmod +x "$APP" 2>/dev/null
   chmod +x "$HOME/.local/bin/xtool"
   step xtool ok
 else
   step xtool fail
 fi
+
+# ---------- sesión Apple ID de una reinstalación (backup local, sin redes) ----------
+RESTORED=""
+for BK in /mnt/c/Users/*/AppData/Local/WiniOS/auth/xtool-config; do
+  if test -d "$BK"; then
+    mkdir -p "$HOME/.config/xtool"
+    cp -a "$BK/." "$HOME/.config/xtool/" 2>/dev/null && RESTORED=1
+  fi
+done
 
 # proyecto de ejemplo para no empezar de cero
 if ! test -d "$WORK/projects/WinizHello"; then
@@ -684,6 +694,7 @@ fi
 
 # ---------- Apple ID (comprobación; el login es interactivo) ----------
 if "$APP" auth status 2>/dev/null | head -1 | grep -qi 'Logged in'; then
+  test -n "$RESTORED" && log "sesión Apple ID restaurada desde tu equipo (ninguna clave viajó por la red)"
   step auth ok
 else
   step auth manual
