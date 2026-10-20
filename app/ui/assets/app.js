@@ -33,7 +33,7 @@ const I18N = {
     phases: { unpacking: "Desempaquetar", preparing: "Dispositivo", provisioning: "Permisos Apple", signing: "Firmar",
       packaging: "Empaquetar", connecting: "Conectar", installing: "Instalar", verifying: "Verificar",
       launching: "Abrir", device_found: "iPhone detectado" },
-    bannerInstalled: "Instalada ✓ — ábrelo en tu iPhone (el fallo del lanzamiento automático es conocido)",
+    bannerInstalled: "¡App instalada en tu iPhone!",
     bannerFail: "La operación terminó con error. Revisa el log de abajo.",
     bannerBuild: "Compilación lista", logTitle: "Registro de instalación",
     prefsLang: "Idioma", about: "Acerca de", soon: "Llegará en v0.3",
@@ -47,6 +47,8 @@ const I18N = {
     setupDone: "¡Todo está listo para crear!", setupStartBtn: "Empezar a crear",
     setupRetry: "Reintentar lo que falló",
     checkingHint: "Comprobando el USB del iPhone…",
+    bannerOpenHint: "Ábrela con su ícono en la pantalla de inicio de tu iPhone (Apple no permite el arranque automático desde la computadora en iOS 17+).",
+    bannerOpenHintConsole: "La línea anterior es el mensaje real del motor.",
     authTitle: "Iniciar sesión con tu Apple ID",
     authSub: "Tu sesión firma e instala las apps que crees en tu iPhone. Se guarda solo en este equipo, dentro del entorno aislado.",
     authApple: "Apple ID",
@@ -137,7 +139,7 @@ const I18N = {
     phases: { unpacking: "Unpack", preparing: "Device", provisioning: "Apple grants", signing: "Sign",
       packaging: "Package", connecting: "Connect", installing: "Install", verifying: "Verify",
       launching: "Launch", device_found: "iPhone detected" },
-    bannerInstalled: "Installed ✓ — open it on your iPhone (automatic launch failure is known)",
+    bannerInstalled: "App installed on your iPhone!",
     bannerFail: "The operation failed. Check the log below.",
     bannerBuild: "Build ready", logTitle: "Installation log",
     prefsLang: "Language", about: "About", soon: "Coming in v0.3",
@@ -151,6 +153,8 @@ const I18N = {
     setupDone: "Everything is ready to create!", setupStartBtn: "Start creating",
     setupRetry: "Retry what failed",
     checkingHint: "Checking the iPhone USB…",
+    bannerOpenHint: "Open it from its icon on your iPhone home screen (Apple doesn't allow automatic launching from a computer on iOS 17+).",
+    bannerOpenHintConsole: "The line above is the actual engine message.",
     authTitle: "Sign in with your Apple ID",
     authSub: "Your session signs and installs the apps you create on your iPhone. It stays on this computer, inside the isolated environment.",
     authApple: "Apple ID",
@@ -337,7 +341,7 @@ function renderRail() {
 
 const activeProject = () => localStorage.getItem("winios.project") || state.projects[0] || "";
 
-const PHASE_ORDER = ["unpacking", "preparing", "provisioning", "signing", "packaging", "connecting", "installing", "verifying", "launching"];
+const PHASE_ORDER = ["unpacking", "preparing", "provisioning", "signing", "packaging", "connecting", "installing", "verifying"];
 
 /* veredicto único del estado del iPhone: chip, Inicio y siguiente paso
    comparten esta lógica para no contradecirse nunca */
@@ -565,9 +569,9 @@ function vActivity() {
     const cls = st === 2 ? "done" : st === 1 ? "now" : "";
     return `<span class="phase ${cls}">${T("phases")[p] || p}</span>`;
   }).join("");
-  const banner = !state.status ? "" : `<div class="status-banner ${state.status === "fail" ? "err" : "ok"}">
-    ${state.status === "installed" ? T("bannerInstalled") : state.status === "build" ? T("bannerBuild") : T("bannerFail")}
-  </div>`;
+  const banner = !state.status ? "" : state.status === "fail"
+    ? `<div class="status-banner err"><div>${T("bannerFail")}</div>${state.lastErr ? `<p class="banner-detail">${esc(state.lastErr)}</p><p class="banner-detail dim2">${T("bannerOpenHintConsole")}</p>` : ""}</div>`
+    : `<div class="status-banner ok"><div>${state.status === "installed" ? T("bannerInstalled") : T("bannerBuild")}</div>${state.status === "installed" ? `<p class="banner-detail">${T("bannerOpenHint")}</p>` : ""}</div>`;
   const empty = !state.log.length && !state._runBusy ? `<div class="empty-state">
     <p class="hint">${T("actEmpty")}</p>
     <button class="primary" id="btn-run-now">${T("run")}</button>
@@ -860,7 +864,7 @@ async function createProject(name) {
 async function doRun() {
   if (!state.devices.length) { toast(T("emptyDevices"), "err"); state.view = "devices"; render(); return; }
   const project = activeProject();
-  state.view = "activity"; state.phases = {}; state.log = []; state.status = null;
+  state.view = "activity"; state.phases = {}; state.log = []; state.status = null; state.lastErr = null;
   state._runBusy = true;
   render();
   logLine(`▶ ${T("run")} · ${project} → iPhone`, "hl");
@@ -939,7 +943,9 @@ listen("deploy://line", (ev) => {
     updatePhasesUI();
     return;
   }
-  logLine(line, /error|fatal|failed/i.test(line) ? "err" : "");
+  const isErr = /error|fatal|failed/i.test(line);
+  if (isErr && !state.lastErr) state.lastErr = line;
+  logLine(line, isErr ? "err" : "");
   if (line.includes("Building") && !state.phases.unpacking) state.phases.unpacking = 1;
   refreshPhaseFromLine(line);
   updatePhasesUI();
@@ -982,8 +988,13 @@ function refreshPhaseFromLine(line) {
 listen("deploy://done", (ev) => {
   const code = String(ev.payload.code ?? ev.payload).trim();
   state._runBusy = false;
-  if (code === "0") state.status = state.phases.verifying === 2 ? "installed" : "build";
-  else state.status = "fail";
+  // cierre abrupto ("closed") con Verificar completado = instalación lograda:
+  // la evidencia manda (xtool dev run enlaza build→instala→verifica)
+  if ((code === "0" || (code === "closed" && state.phases.verifying === 2))) {
+    state.status = state.phases.verifying === 2 ? "installed" : "build";
+  } else {
+    state.status = "fail";
+  }
   if (state.view === "activity") render();
   // refrescar estado del dispositivo tras una instalación
   scanDevices();
