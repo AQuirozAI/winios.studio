@@ -305,7 +305,10 @@ fn flush_prompt(cur: &mut Vec<u8>, emit: &mut dyn FnMut(String)) {
     }
 }
 
-fn pump_frames(mut stdout: impl std::io::Read, mut emit: impl FnMut(String)) {
+fn pump_frames(
+    mut stdout: impl std::io::Read + Send + 'static,
+    mut emit: impl FnMut(String),
+) {
     use std::io::Read;
     use std::sync::mpsc;
     use std::time::Duration;
