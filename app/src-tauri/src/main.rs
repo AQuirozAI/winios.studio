@@ -784,10 +784,14 @@ if test -n "$NEEDS_UAC"; then
   log "configurando Windows — acepta la ventana de permisos (UAC)…"
   cat > /mnt/c/Users/Public/winios-setup.ps1 <<'PS1EOF'
 $gw = '@GW@'
+$log = 'C:\Users\Public\winios-setup-log.txt'
 $msi = 'C:\Users\Public\AppleMobileDeviceSupport64.msi'
 $srv = 'C:\Program Files\Common Files\Apple\Mobile Device Support\AppleMobileDeviceService.exe'
+"== WinIOS setup $(Get-Date -Format s) ==" | Out-File $log -Encoding utf8
 if ((Test-Path $msi) -and -not (Test-Path $srv)) {
   Start-Process msiexec -ArgumentList '/i',$msi,'/qn','/norestart' -Wait
+  "msi instalado" | Out-File $log -Append -Encoding utf8
+}
   Start-Sleep -Seconds 2
 }
 Get-Service 'Apple Mobile Device Service' -ErrorAction SilentlyContinue | ForEach-Object {
@@ -801,9 +805,14 @@ if ($gw) {
   netsh advfirewall firewall delete rule name="Winios27015-in" 2>$null | Out-Null
   netsh advfirewall firewall add rule name="Winios27015-in" dir=in action=allow protocol=TCP localport=27015 remoteip=172.16.0.0/12 2>$null | Out-Null
 }
+$s = Get-Service 'Apple Mobile Device Service' -ErrorAction SilentlyContinue
+"srv-exists: $(if ($s) { $s.Status } else { 'False' })" | Out-File $log -Append -Encoding utf8
+if ($gw) { "portproxy: $((netsh interface portproxy show all | Out-String))" | Out-File $log -Append -Encoding utf8 }
 PS1EOF
   sed -i "1s|@GW@|$GW|" /mnt/c/Users/Public/winios-setup.ps1
-  powershell.exe -NoProfile -Command "Start-Process powershell -Verb RunAs -Wait -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','C:\Users\Public\winios-setup.ps1'" </dev/null >/dev/null 2>&1
+  # sin ventana visible: el PowerShell elevado con UAC muestra una consola
+  # en medio de la GUI (queja del usuario). Oculto y con evidencia en log.
+  powershell.exe -NoProfile -Command "Start-Process powershell -Verb RunAs -Wait -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-WindowStyle','Hidden','-File','C:\Users\Public\winios-setup.ps1'" </dev/null >/dev/null 2>&1
 fi
 
 sleep 2
