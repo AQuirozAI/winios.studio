@@ -1,0 +1,12 @@
+# artefactos de pruebas locales (no versionar)
+projects/
+tools/
+*.AppImage
+.build/
+
+# sesiones/estados de herramientas
+.impeccable/
+
+# builds locales del motor
+target/
+node_modules/

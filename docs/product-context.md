@@ -12,6 +12,7 @@ Versión: borrador v3. Última actualización: 2026-10-14. Contexto confirmado p
 - Objetivo comercial: experiencia UX/UI suficientemente valiosa para que usuarios quieran pagar. Precio, conversión y disposición a pagar no están validados.
 - Inglés y español desde el inicio, localización extensible.
 - Motor Rust + Tauri elegido explícitamente por el usuario; UX y rendimiento medido.
+- Instalación aislada (2026-10-19): la app corre en una distribución WSL dedicada "WinIOS" creada con `wsl --import` desde el rootfs oficial de Ubuntu 24.04 (usuario dedicado "winios", sudo sin contraseña, residente en `%LOCALAPPDATA%\WiniOS`). Ninguna otra distribución WSL del equipo se toca. El aprovisionamiento entero — WSL core → distro → dependencias → Swift → xtool → SDK/Apple ID (guiado) → servicio Apple + puente TCP (un solo UAC) → iPhone — se ejecuta automáticamente en el primer arranque y es idempotente.
 - Evolución a otros tipos de desarrollo; compatibilidad transparente y correcciones automáticas con recuperación.
 - Impeccable solicitado e instalado para diseño; dirección visual aprobada y documentada en [DESIGN.md](../DESIGN.md).
 
@@ -28,5 +29,6 @@ El archivo está en `docs` porque `.agents` es un montaje de solo lectura en est
 ## Cambios
 
 - v3 (2026-10-14): incorpora la dirección visual aprobada, sus estándares permanentes y la investigación de necesidades de desarrollo iOS desde Windows.
+- v4 (2026-10-19): fusión/enlace de la decisión de instalación aislada: distro dedicada WinIOS con aprovisionamiento automático y cero interacción (salvo UAC y Apple ID); scripts `install-windows.ps1` alineados.
 - v2 (2026-10-13): incorpora la elección Rust/Tauri, EN/ES, extensibilidad, compatibilidad/recuperación, Impeccable y el condicionante comercial del SDK Apple.
 - v1 (2026-10-13): recoge el brief y la ampliación explícita a usuarios sin experiencia; separa hechos de hipótesis comerciales.
