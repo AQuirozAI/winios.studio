@@ -615,7 +615,8 @@ fn ensure_distro(app: &AppHandle) -> Result<(), String> {
                 } else {
                     stalls = 0;
                     last = mb;
-                    emit_line(&watcher, &format!("imagen descargada: {} MB…", mb));
+                    // progreso en vivo del asistente (barra por paso en la UI)
+                    emit_line(&watcher, &format!("@WINIOS:MB:download:{mb}"));
                 }
             }
         });
@@ -695,7 +696,14 @@ if command -v swift >/dev/null 2>&1; then
 else
   log "descargando Swift __SWIFT_VER__ (~1 GB) — esto compilará tus apps…"
   curl -fL "https://download.swift.org/swift-__SWIFT_VER__-release/ubuntu2404/swift-__SWIFT_VER__-RELEASE/swift-__SWIFT_VER__-RELEASE-ubuntu24.04.tar.gz" \
-    -o /tmp/swift.tgz 2>/dev/null
+    -o /tmp/swift.tgz >/dev/null 2>&1 &
+  CURLPID=$!
+  while kill -0 "$CURLPID" 2>/dev/null; do
+    MB=$(du -m /tmp/swift.tgz 2>/dev/null | cut -f1)
+    test -n "$MB" && printf '@WINIOS:MB:swift:%s\n' "$MB"
+    sleep 2
+  done
+  wait "$CURLPID" 2>/dev/null
   if test -f /tmp/swift.tgz; then
     sudo rm -rf /opt/swift
     sudo mkdir -p /opt/swift
@@ -770,7 +778,14 @@ step service running
 if test -z "$AMDS_RUNNING" && test -z "$AMDS_INSTALLED"; then
   log "descargando componente oficial de Apple (iTunes) — puede tardar unos minutos…"
   test -f /mnt/c/Users/Public/iTunes64Setup.exe || \
-    powershell.exe -NoProfile -Command "\$ProgressPreference='SilentlyContinue'; Invoke-WebRequest -Uri 'https://www.apple.com/itunes/download/win64/' -OutFile 'C:\Users\Public\iTunes64Setup.exe' -UseBasicParsing" </dev/null >/dev/null 2>&1
+    powershell.exe -NoProfile -Command "\$ProgressPreference='SilentlyContinue'; Invoke-WebRequest -Uri 'https://www.apple.com/itunes/download/win64/' -OutFile 'C:\Users\Public\iTunes64Setup.exe' -UseBasicParsing" </dev/null >/dev/null 2>&1 &
+  ITUNESPID=$!
+  while kill -0 "$ITUNESPID" 2>/dev/null; do
+    MB=$(du -m /mnt/c/Users/Public/iTunes64Setup.exe 2>/dev/null | cut -f1)
+    test -n "$MB" && printf '@WINIOS:MB:service:%s\n' "$MB"
+    sleep 2
+  done
+  wait "$ITUNESPID" 2>/dev/null
   if test -f /mnt/c/Users/Public/iTunes64Setup.exe; then
     command -v 7z >/dev/null 2>&1 || true
     if command -v 7z >/dev/null 2>&1; then

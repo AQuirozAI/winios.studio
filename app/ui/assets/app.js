@@ -446,12 +446,33 @@ function vHome() {
 const STEP_GLYPH = {
   ok: G.ok, fail: G.fail, warn: G.warn, reboot: G.reboot, pending: G.pending,
 };
+/* tamaños estimados de descarga (MB) para las barras de progreso */
+const STEP_EST = { download: 370, swift: 1024, service: 420 };
+
+/* repinta solo la fila del paso con su % de MB — barato en el sondeo de 2s */
+function updateStepPct(id) {
+  if (state.view !== "setup") return;
+  const $row = document.getElementById(`step-${id}`);
+  if (!$row) return;
+  const bg = $row.dataset.running === "1";
+  const mbv = state.setup.mb?.[id];
+  $row.outerHTML = stepRow(id);
+  if (!bg) document.getElementById(`step-${id}`)?.scrollIntoView({ block: "nearest" });
+}
+
 function stepRow(id) {
   const st = stepState(id);
   const badgeKind = { ok: "ok", fail: "fail", running: "running", manual: "warn", reboot: "warn", pending: "dim" }[st];
   const b = st === "running"
     ? `<span class="state-badge running"><span class="spin" aria-hidden="true"></span>${esc(T("st_running"))}</span>`
     : badge(badgeKind, T(`st_${st}`) || st);
+  // barra de progreso en MB (descargas): % con tamaño real y estimado
+  const mbv = state.setup.mb?.[id];
+  const est = STEP_EST[id];
+  const pct = mbv && est ? Math.min(100, Math.round((mbv / est) * 100)) : 0;
+  const bar = st === "running" && mbv && est
+    ? `<div class="step-bar"><div class="step-track"><div class="step-bar-fill" style="width:${pct}%"></div></div><span>${mbv} MB · ${pct}%</span></div>`
+    : "";
   const glyph = st === "running" ? `<span class="spin" style="margin-top:5px" aria-hidden="true"></span>`
     : STEP_GLYPH[st] || G.pending;
   const help = (id === "auth" && st === "manual") ? `<div class="step-help">${T("authHint")}
@@ -468,11 +489,12 @@ function stepRow(id) {
         <p class="step-note" id="wslcore-note"></p></div>`
     : (id === "distro" && st === "reboot") ? `<div class="step-help warn-note">${T("wslcoreReboot")}</div>`
     : "";
-  return `<div class="wstep ${st}" data-id="${id}">
+  return `<div class="wstep ${st}" data-id="${id}" id="step-${id}" data-running="${st === "running" ? 1 : 0}">
     ${glyph}
     <div class="wstep-body">
       <div class="wstep-name">${esc(T(`step_${id}`))}</div>
       <div class="wstep-hint">${esc(T(`step_${id}_h`))}</div>
+      ${bar}
       ${help}
     </div>
     <div class="wstep-state">${b}</div>
@@ -1072,11 +1094,20 @@ listen("auth://result", async (ev) => {
 
 /* ---------- eventos del motor: asistente ---------- */
 listen("setup://line", (ev) => {
-  state.setup.log.push(ev.payload.line);
+  const ln = ev.payload.line;
+  // progreso en vivo de descargas (MB) → barras por paso, sin ensuciar el log
+  const mbm = /^@WINIOS:MB:(\w+):(\d+)$/.exec(ln.trim());
+  if (mbm) {
+    state.setup.mb = state.setup.mb || {};
+    state.setup.mb[mbm[1]] = Number(mbm[2]);
+    if (state.view === "setup" && !$("dlg-new")?.open) updateStepPct(mbm[1]);
+    return;
+  }
+  state.setup.log.push(ln);
   if (state.setup.log.length > 1200) state.setup.log = state.setup.log.slice(-900);
   const $log = $("wlog");
   if ($log) {
-    $log.textContent += (state.setup.log.length > 1 ? "\n" : "") + ev.payload.line;
+    $log.textContent += (state.setup.log.length > 1 ? "\n" : "") + ln;
     $log.scrollTop = $log.scrollHeight;
   } else if (state.view === "setup") render();
 });
