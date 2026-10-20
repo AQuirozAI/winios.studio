@@ -1043,14 +1043,14 @@ listen("auth://line", (ev) => {
   state.auth.lines.push(ln);
   if (state.auth.lines.length > 300) state.auth.lines = state.auth.lines.slice(-220);
   // Apple pide el código de verificación en vivo → visible al instante
-  if (state.auth.step === "working" && AUTH_PROMPT_CODE.test(ln.replace(/\x1b\[[0-9;]*[A-Za-z]/g, ""))) {
-    state.auth.step = "twofa";
-  }
+  const switched = state.auth.step === "working"
+    && AUTH_PROMPT_CODE.test(ln.replace(/\x1b\[[0-9;]*[A-Za-z]/g, ""));
+  if (switched) state.auth.step = "twofa";
   const $log = $("auth-log");
-  if ($log) {
+  if (!switched && $log) {
     $log.insertAdjacentHTML("beforeend", `<div class="log-line">${esc(ln)}</div>`);
     $log.scrollTop = $log.scrollHeight;
-  } else if (state.view === "auth") render();
+  } else if (state.view === "auth") render(); // cambia working→twofa: repinta para el campo del código
 });
 
 listen("auth://result", async (ev) => {
