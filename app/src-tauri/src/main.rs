@@ -510,8 +510,13 @@ fn run_project(app: AppHandle, name: String) -> Result<String, String> {
         return Err("Nombre inválido".into());
     }
     // gateway dinámico + transporte + args fijos; nada del usuario entra en el shell
+    // el stdin se alimenta con 'yes': cuando Apple limita el free provisioning a
+    // 2 certificados, xtool pregunta "Continue? (yes/no):" para revocar el viejo —
+    // sin respuesta el despliegue muere en "Cancelled." sin explicación. Revocar
+    // es la vía normal del ciclo de free provisioning (el nuevo certificado firmo­
+    // riza la app actual; el log deja evidencia de qué se revocó).
     let text = wrap_common(&format!(
-        r#"cd "$WORK/projects/{_NAME}" && "$APP" dev run --configuration debug --usb 2>&1
+        r#"cd "$WORK/projects/{_NAME}" && printf 'yes\nyes\nyes\n' | "$APP" dev run --configuration debug --usb 2>&1
 printf '@WINIOS:EXIT:%s\n' "$?""#,
         _NAME = name
     ));

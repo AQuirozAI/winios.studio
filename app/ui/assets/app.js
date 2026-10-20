@@ -35,6 +35,8 @@ const I18N = {
       launching: "Abrir", device_found: "iPhone detectado" },
     bannerInstalled: "¡App instalada en tu iPhone!",
     bannerFail: "La operación terminó con error. Revisa el log de abajo.",
+    errRevoked: "Apple pidió revocar tu certificado de desarrollo anterior para firmar la app (límite de 2 certificados del free provisioning). El motor aceptó el permiso; si aún así cancela, vuelve a desplegar.",
+    errCancelled: "El despliegue se canceló antes de terminar — normalmente porque faltó responder una confirmación. Revisa el log; si no se ve el motivo, reenvía la instalación.",
     bannerBuild: "Compilación lista", logTitle: "Registro de instalación",
     prefsLang: "Idioma", about: "Acerca de", soon: "Llegará en v0.3",
     emptyDevices: "Conecta tu iPhone con el cable y desbloquéalo. Pulsa «Confiar» si aparece.",
@@ -141,6 +143,8 @@ const I18N = {
       launching: "Launch", device_found: "iPhone detected" },
     bannerInstalled: "App installed on your iPhone!",
     bannerFail: "The operation failed. Check the log below.",
+    errRevoked: "Apple asked to revoke your previous development certificate to sign the app (free provisioning allows 2). The engine approved it; if it still cancels, deploy again.",
+    errCancelled: "The deployment was cancelled before finishing — usually because a confirmation went unanswered. Check the log; if the reason isn't visible, run the install again.",
     bannerBuild: "Build ready", logTitle: "Installation log",
     prefsLang: "Language", about: "About", soon: "Coming in v0.3",
     emptyDevices: "Plug your iPhone via cable and unlock it. Tap “Trust” if asked.",
@@ -943,8 +947,14 @@ listen("deploy://line", (ev) => {
     updatePhasesUI();
     return;
   }
-  const isErr = /error|fatal|failed/i.test(line);
-  if (isErr && !state.lastErr) state.lastErr = line;
+  const isErr = /error|fatal|failed|cancelled/i.test(line);
+  if (/must be revoked/i.test(line)) {
+    // free provisioning: Apple pide revocar el certificado anterior — el
+    // motor ya responde 'yes'; si el flujo aun así aborta, la UI sabe explicar
+    state.lastErr = T("errRevoked");
+  } else if (/^cancelled\.?$/i.test(line.trim()) && !state.lastErr) {
+    state.lastErr = T("errCancelled");
+  } else if (isErr && !state.lastErr) state.lastErr = line;
   logLine(line, isErr ? "err" : "");
   if (line.includes("Building") && !state.phases.unpacking) state.phases.unpacking = 1;
   refreshPhaseFromLine(line);
