@@ -47,6 +47,26 @@ const I18N = {
     setupDone: "¡Todo está listo para crear!", setupStartBtn: "Empezar a crear",
     setupRetry: "Reintentar lo que falló",
     checkingHint: "Comprobando el USB del iPhone…",
+    authTitle: "Iniciar sesión con tu Apple ID",
+    authSub: "Tu sesión firma e instala las apps que crees en tu iPhone. Se guarda solo en este equipo, dentro del entorno aislado.",
+    authApple: "Apple ID",
+    authApplePh: "nombre@icloud.com",
+    authPass: "Contraseña",
+    authPassPh: "Contraseña de tu Apple ID",
+    authSubmit: "Iniciar sesión",
+    authSubmitting: "Iniciando sesión…",
+    auth2fa: "Código de verificación",
+    auth2faSub: "Apple pidió un código. Escribe el número que aparece en tu iPhone u otro equipo conectado.",
+    auth2faSend: "Enviar código",
+    authOk: "Sesión enlazada",
+    authOkSub: "Ya puedes firmar e instalar apps con este Apple ID.",
+    authFail: "No se pudo iniciar sesión",
+    authRetry: "Reintentar",
+    authHeads: "xtool usa esta cuenta como equipo de desarrollo (emulación de PC frente a los servicios de Apple). Las credenciales van solo a Apple; considera usar una Apple ID secundaria.",
+    authForgot: "¿Olvidaste tu contraseña? appleid.apple.com",
+    authConsole: "Usar la ventana de consola (respaldo)",
+    authBack: "Listo",
+    authSecured: "Se guarda cifrada en el entorno aislado WinIOS, no en tu Windows.",
     of: "de", stepsReady: "{A} {of} {B} listos",
     step_wslcore: "Plataforma WSL ( Windows )",
     step_wslcore_h: "La función de Windows que ejecuta el Ubuntu aislado.",
@@ -130,6 +150,26 @@ const I18N = {
     setupDone: "Everything is ready to create!", setupStartBtn: "Start creating",
     setupRetry: "Retry what failed",
     checkingHint: "Checking the iPhone USB…",
+    authTitle: "Sign in with your Apple ID",
+    authSub: "Your session signs and installs the apps you create on your iPhone. It stays on this computer, inside the isolated environment.",
+    authApple: "Apple ID",
+    authApplePh: "name@icloud.com",
+    authPass: "Password",
+    authPassPh: "Your Apple ID password",
+    authSubmit: "Sign in",
+    authSubmitting: "Signing in…",
+    auth2fa: "Verification code",
+    auth2faSub: "Apple asked for a code. Enter the number shown on your iPhone or another trusted device.",
+    auth2faSend: "Send code",
+    authOk: "Session linked",
+    authOkSub: "You can now sign and install apps with this Apple ID.",
+    authFail: "Could not sign in",
+    authRetry: "Try again",
+    authHeads: "xtool uses this account as a development device (PC emulation against Apple services). Credentials are only ever sent to Apple; consider using a secondary Apple ID.",
+    authForgot: "Forgot your password? appleid.apple.com",
+    authConsole: "Use the console window (fallback)",
+    authBack: "Done",
+    authSecured: "Stored inside the isolated WinIOS environment, never on Windows.",
     of: "of", stepsReady: "{A} {of} {B} ready",
     step_wslcore: "WSL platform ( Windows )",
     step_wslcore_h: "The Windows feature that runs the isolated Ubuntu.",
@@ -183,6 +223,7 @@ const state = {
   setup: { running: false, done: null, steps: {}, log: [] },
   scanning: false,
   booting: true,
+  auth: { step: "form", apple: "", pass: "", lines: [], result: null, back: "home" },
 };
 const $view = document.getElementById("view");
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -252,7 +293,7 @@ function render() {
   // conservar la posición de scroll entre renders: el repintado no sacude la vista
   const keep = { view: $view.dataset.view, top: $view.scrollTop };
   renderTopbar(); renderRail();
-  $view.innerHTML = { home: vHome, setup: vSetup, projects: vProjects, devices: vDevices, activity: vActivity, settings: vSettings }[state.view]();
+  $view.innerHTML = { home: vHome, setup: vSetup, projects: vProjects, devices: vDevices, activity: vActivity, settings: vSettings, auth: vAuth }[state.view]();
   $view.dataset.view = state.view;
   if (keep.view === state.view) $view.scrollTop = keep.top;
   wire();
@@ -404,7 +445,8 @@ function stepRow(id) {
   const glyph = st === "running" ? `<span class="spin" style="margin-top:5px" aria-hidden="true"></span>`
     : STEP_GLYPH[st] || G.pending;
   const help = (id === "auth" && st === "manual") ? `<div class="step-help">${T("authHint")}
-      <div><button class="ghost" id="btn-auth">${T("authBtn")}</button></div></div>`
+      <button class="primary" id="btn-auth-open">${T("authSubmit")}</button>
+      <button class="link" id="btn-auth">${T("authConsole")}</button></div>`
     : (id === "sdk" && st === "manual") ? `<div class="step-help sdk">
         <div class="drop" id="sdk-drop">${T("sdkDrop")}</div>
         <div class="row-actions"><span>${T("sdkOr")}</span>
@@ -535,6 +577,61 @@ function vActivity() {
   </div>` : ""}`;
 }
 
+/* ---------- sesión Apple ID (panel estilo iTunes) ---------- */
+const PERSON_GLYPH = `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.2" r="3.6"/><path d="M4.6 19.4c1.6-3.2 4.4-4.8 7.4-4.8s5.8 1.6 7.4 4.8"/></svg>`;
+
+function vAuth() {
+  const a = state.auth;
+  const body = a.step === "form" ? `
+      <form id="auth-form">
+        <label class="auth-label">${T("authApple")}
+          <input id="auth-apple" class="auth-input" type="text" inputmode="email" autocapitalize="off"
+            autocomplete="off" spellcheck="false" placeholder="${T("authApplePh")}" required/>
+        </label>
+        <label class="auth-label">${T("authPass")}
+          <input id="auth-pass" class="auth-input" type="password" autocomplete="off"
+            placeholder="${T("authPassPh")}" required/>
+        </label>
+        <button class="auth-btn" id="btn-auth-go" type="submit">${T("authSubmit")}</button>
+      </form>
+      <p class="auth-note">${T("authHeads")}</p>
+      <p class="auth-note dim2">${T("authSecured")}</p>
+      <div class="auth-foot">
+        <button class="link" id="btn-auth">${T("authConsole")}</button>
+        <span class="kv">${T("authForgot").split(" ").pop()}</span>
+      </div>`
+  : a.step === "working" ? `
+      <div class="auth-busy"><span class="spin"></span><span>${T("authSubmitting")}</span></div>
+      <div class="log auth-log" id="auth-log">${a.lines.map((l) => `<div class="log-line">${esc(l)}</div>`).join("")}</div>
+      <button class="link" id="btn-auth-cancel" style="margin-top:10px">${T("cancel")}</button>`
+  : a.step === "twofa" ? `
+      <p class="auth-sub">${T("auth2faSub")}</p>
+      <form id="auth-2fa">
+        <label class="auth-label">${T("auth2fa")}
+          <input id="auth-code" class="auth-input code" type="text" inputmode="numeric"
+            autocomplete="one-time-code" maxlength="10" placeholder="123456" required/>
+        </label>
+        <button class="auth-btn" id="btn-auth-code" type="submit">${T("auth2faSend")}</button>
+      </form>
+      <button class="link" id="btn-auth-cancel" style="margin-top:10px">${T("cancel")}</button>`
+  : /* result */ `
+      <div class="status-banner ${a.result?.ok ? "ok" : "err"}">${a.result?.ok ? T("authOk") : T("authFail")}</div>
+      <p class="auth-sub">${a.result?.ok ? T("authOkSub") : `<span class="detail">${esc(a.result?.detail || "")}</span>`}</p>
+      <div class="auth-foot" style="justify-content:flex-start">
+        ${a.result?.ok ? `<button class="auth-btn" id="btn-auth-back">${T("authBack")}</button>`
+          : `<button class="auth-btn" id="btn-auth-retry">${T("authRetry")}</button>
+             <button class="link" id="btn-auth">${T("authConsole")}</button>`}
+      </div>`;
+  return `<div class="auth-wrap">
+    <div class="auth-card">
+      <div class="auth-glyph">${PERSON_GLYPH}</div>
+      <h1 class="auth-title">${T("authTitle")}</h1>
+      <p class="auth-sub">${T("authSub")}</p>
+      ${body}
+    </div>
+  </div>`;
+}
+
 /* ---------- preferencias ---------- */
 function vSettings() {
   const eng = checkById("engine");
@@ -550,6 +647,11 @@ function vSettings() {
           <option value="es" ${lang === "es" ? "selected" : ""}>Español</option>
           <option value="en" ${lang === "en" ? "selected" : ""}>English</option>
         </select>
+      </div>
+      <div class="pref-row">
+        <div><div class="plabel">Apple ID</div>
+          <div class="pdetail">${esc(checkById("auth")?.detail || T("authTitle"))}</div></div>
+        ${checkById("auth")?.state === "ok" ? badge("ok", T("ready")) : `<button class="ghost" id="btn-auth-open">${T("authSubmit")}</button>`}
       </div>
       <div class="pref-row">
         <div><div class="plabel">Codex</div><div class="pdetail">${T("tellCodex")}</div></div>
@@ -616,10 +718,26 @@ function wire() {
   $("btn-go")?.addEventListener("click", () => { state.view = "home"; state.setup.done = "ok"; localStorage.setItem("winios.setupDone", "1"); render(); });
   $("btn-auth")?.addEventListener("click", async (e) => {
     e.target.disabled = true;
-    try { await invoke("setup_open_console", { kind: "auth" }); toast(T("authHint")); }
-    catch (err) { toast(String(err), "err"); }
+    try {
+      await invoke("setup_open_console", { kind: "auth" });
+      toast(T("authHint"));
+    } catch (err) { toast(String(err), "err"); }
     e.target.disabled = false;
   });
+  $("btn-auth-open")?.addEventListener("click", () => { openAuth(); });
+  $("btn-apple-id-row")?.addEventListener("click", () => {
+    if (checkById("auth")?.state !== "ok") openAuth("settings");
+  });
+  $("auth-form")?.addEventListener("submit", (e) => { e.preventDefault(); doAuthLogin(); });
+  $("auth-2fa")?.addEventListener("submit", (e) => { e.preventDefault(); doAuthCode(); });
+  $("btn-auth-go")?.addEventListener("click", doAuthLogin);
+  $("btn-auth-code")?.addEventListener("click", doAuthCode);
+  $("btn-auth-cancel")?.addEventListener("click", async () => {
+    try { await invoke("auth_close"); } catch { /* sin sesión */ }
+    state.auth.step = "form"; state.auth.lines = []; render();
+  });
+  $("btn-auth-back")?.addEventListener("click", () => { state.view = state.auth.back; render(); });
+  $("btn-auth-retry")?.addEventListener("click", () => { state.auth.step = "form"; state.auth.lines = []; state.auth.result = null; render(); });
   $("btn-wslcore")?.addEventListener("click", async (e) => {
     e.target.disabled = true;
     try { const r = await invoke("setup_distro"); if (r === "reboot") { const n = $("wslcore-note"); if (n) n.textContent = T("wslcoreReboot"); state.setup.steps.wslcore = "reboot"; render(); } }
@@ -811,6 +929,66 @@ listen("deploy://done", (ev) => {
   if (state.view === "activity") render();
   // refrescar estado del dispositivo tras una instalación
   scanDevices();
+});
+
+/* ---------- acciones Apple ID en vivo ---------- */
+function openAuth(back) {
+  if (back) state.auth.back = back;
+  const c = checkById("auth");
+  if (c?.state === "ok") {
+    state.auth.step = "result";
+    state.auth.result = { ok: true, detail: c.detail };
+  } else {
+    state.auth.step = "form";
+    state.auth.result = null;
+  }
+  state.view = "auth";
+  render();
+}
+
+const AUTH_PROMPT_CODE = /(verification|passcode|\bcode\b|two.?factor)/i;
+
+function doAuthLogin() {
+  const apple = $("auth-apple")?.value.trim() || "";
+  const pass = $("auth-pass")?.value || "";
+  if (!apple || !pass) return;
+  state.auth.apple = apple; state.auth.pass = pass;
+  state.auth.step = "working"; state.auth.lines = []; state.auth.result = null;
+  render();
+  invoke("auth_login", { username: apple, password: pass }).catch((e) => {
+    state.auth.step = "result"; state.auth.result = { ok: false, detail: String(e) };
+    render();
+    toast(String(e), "err");
+  });
+}
+
+function doAuthCode() {
+  const c = $("auth-code")?.value.trim() || "";
+  if (!c) return;
+  state.auth.step = "working"; render();
+  invoke("auth_feed", { code: c }).catch((e) => { toast(String(e), "err"); });
+}
+
+listen("auth://line", (ev) => {
+  const ln = ev.payload.line;
+  state.auth.lines.push(ln);
+  if (state.auth.lines.length > 300) state.auth.lines = state.auth.lines.slice(-220);
+  // Apple pide el código de verificación en vivo → visible al instante
+  if (state.auth.step === "working" && AUTH_PROMPT_CODE.test(ln.replace(/\x1b\[[0-9;]*[A-Za-z]/g, ""))) {
+    state.auth.step = "twofa";
+  }
+  const $log = $("auth-log");
+  if ($log) {
+    $log.insertAdjacentHTML("beforeend", `<div class="log-line">${esc(ln)}</div>`);
+    $log.scrollTop = $log.scrollHeight;
+  } else if (state.view === "auth") render();
+});
+
+listen("auth://result", async (ev) => {
+  state.auth.result = { ok: !!ev.payload.ok, detail: ev.payload.detail || "" };
+  state.auth.step = "result";
+  try { state.checks = await invoke("env_status"); } catch { /* se refresca en el poll */ }
+  if (state.view === "auth") render(); else renderTopbar();
 });
 
 /* ---------- eventos del motor: asistente ---------- */

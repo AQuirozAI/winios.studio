@@ -319,7 +319,103 @@ fn stream_child(app: AppHandle, prefix: &str, mut child: Child, script_text: &st
             let _ = handle.emit(&format!("{prefix}://line"), serde_json::json!({ "line": txt }));
         }
         let _ = child.wait();
+        // cierre natural (sin marcador DONE): la UI también recibe fin de flujo
+        let _ = handle.emit(
+            &format!("{prefix}://done"),
+            serde_json::json!({ "code": "closed" }),
+        );
     });
+}
+
+// ---------- sesión Apple ID en la app (sin consola) ----------
+
+static AUTH_SESS: std::sync::Mutex<Option<Child>> = std::sync::Mutex::new(None);
+
+#[tauri::command]
+fn auth_login(app: AppHandle, username: String, password: String) -> Result<String, String> {
+    if AUTH_SESS.lock().unwrap().is_some() {
+        return Err("ya hay una sesión de inicio en curso".into());
+    }
+    run_script(RUNNER_BLOCK);
+    let u = username.replace('\'', "'\\''");
+    let p = password.replace('\'', "'\\''");
+    let mut child = spawn_wsl(WUSER)?;
+    let cmdline = format!(
+        "script -q -f -c 'exec /home/{WUSER}/.local/bin/xtool auth login -u '{u}' -p '{p}' -m password' /dev/null\n"
+    );
+    if let Some(sin) = child.stdin.as_mut() {
+        let _ = sin.write_all(PROLOGUE.as_bytes());
+        let _ = sin.write_all(b"\n");
+        let _ = sin.write_all(cmdline.as_bytes());
+        let _ = sin.flush();
+    }
+    let stdout = child.stdout.take().unwrap();
+    *AUTH_SESS.lock().unwrap() = Some(child);
+    let h = app.clone();
+    let _ = std::thread::spawn(move || {
+        for line in BufReader::new(stdout).lines().flatten() {
+            let txt = line.trim_end_matches('\r').to_string();
+            if txt.is_empty() {
+                continue;
+            }
+            let _ = h.emit("auth://line", serde_json::json!({ "line": txt }));
+        }
+        drop(AUTH_SESS.lock().unwrap().take()); // cierra stdin; PTY termina
+        // resultado por evidencia: 'xtool auth status' tras el intento
+        let out = run_lines(&wrap_common(
+            r#""$APP" auth status 2>&1 | while read -r L; do printf '@WINIOS:AUTHSTATUS:%s\n' "$L"; done"#,
+        ));
+        let mut ok = false;
+        let mut detail = String::new();
+        if let Ok(lines) = out {
+            for l in &lines {
+                if let Some(s) = marker(l, "AUTHSTATUS") {
+                    let s = s.trim();
+                    if !detail.is_empty() {
+                        detail.push_str(" · ");
+                    }
+                    detail.push_str(s);
+                    if s.contains("Logged in") {
+                        ok = true;
+                    }
+                }
+            }
+        }
+        let _ = h.emit(
+            "auth://result",
+            serde_json::json!({ "ok": ok, "detail": detail }),
+        );
+    });
+    Ok("started".into())
+}
+
+// envía el código 2FA (u otra entrada) al xtool en vivo
+#[tauri::command]
+fn auth_feed(code: String) -> Result<String, String> {
+    let mut guard = AUTH_SESS.lock().unwrap();
+    match guard.as_mut() {
+        Some(child) => {
+            if let Some(sin) = child.stdin.as_mut() {
+                sin.write_all(code.trim().as_bytes())
+                    .and_then(|_| sin.write_all(b"\n"))
+                    .and_then(|_| sin.flush())
+                    .map_err(|e| format!("no se pudo enviar el código: {e}"))?;
+                Ok("sent".into())
+            } else {
+                Err("la sesión ya no acepta entrada".into())
+            }
+        }
+        None => Err("no hay sesión activa".into()),
+    }
+}
+
+// cancela el intento de inicio de sesión
+#[tauri::command]
+fn auth_close() -> Result<String, String> {
+    if let Some(mut c) = AUTH_SESS.lock().unwrap().take() {
+        let _ = c.kill();
+    }
+    Ok("closed".into())
 }
 
 fn emit_step(app: &AppHandle, id: &str, state: &str) {
@@ -757,7 +853,8 @@ fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             env_status, device_list, projects, new_project, run_project,
-            setup_run, sdk_install, setup_open_console, setup_distro
+            setup_run, sdk_install, setup_open_console, setup_distro,
+            auth_login, auth_feed, auth_close
         ])
         .run(tauri::generate_context!())
         .expect("error al correr WiniOS Studio");
