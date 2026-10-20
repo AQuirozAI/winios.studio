@@ -46,6 +46,7 @@ const I18N = {
     setupCta: "Configurar todo automáticamente", setupCtaBusy: "Instalando todo…",
     setupDone: "¡Todo está listo para crear!", setupStartBtn: "Empezar a crear",
     setupRetry: "Reintentar lo que falló",
+    checkingHint: "Comprobando el USB del iPhone…",
     of: "de", stepsReady: "{A} {of} {B} listos",
     step_wslcore: "Plataforma WSL ( Windows )",
     step_wslcore_h: "La función de Windows que ejecuta el Ubuntu aislado.",
@@ -84,6 +85,7 @@ const I18N = {
     fixHint: "Falta configuración del entorno", fixSub: "La app sabe repararlo sola, sin consola ni manual:",
     fixBtn: "Reparar automáticamente",
     whatCreate: "Qué quieres crear",
+    checking: "Comprobando…",
     envErrorTitle: "El entorno no responde",
     copied: "Copiado",
   },
@@ -127,6 +129,7 @@ const I18N = {
     setupCta: "Set up everything automatically", setupCtaBusy: "Installing everything…",
     setupDone: "Everything is ready to create!", setupStartBtn: "Start creating",
     setupRetry: "Retry what failed",
+    checkingHint: "Checking the iPhone USB…",
     of: "of", stepsReady: "{A} {of} {B} ready",
     step_wslcore: "WSL platform ( Windows )",
     step_wslcore_h: "The Windows feature that runs the isolated Ubuntu.",
@@ -165,6 +168,7 @@ const I18N = {
     fixHint: "Environment needs setup", fixSub: "The app can repair itself, no console or manual:",
     fixBtn: "Repair automatically",
     whatCreate: "What do you want to create",
+    checking: "Checking…",
     envErrorTitle: "The environment is not responding",
     copied: "Copied",
   },
@@ -178,6 +182,7 @@ const state = {
   checks: [], devices: [], projects: [], view: "home", phases: {}, status: null, log: [],
   setup: { running: false, done: null, steps: {}, log: [] },
   scanning: false,
+  booting: true,
 };
 const $view = document.getElementById("view");
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -258,20 +263,26 @@ function renderTopbar() {
       sel.dataset.want = `${want}|${state.projects.length}`;
     }
   }
-  const dev = state.devices[0];
+  const d = deviceVerdict();
   const chip = $("device-chip"), chipName = $("device-chip-name");
-  chipName.textContent = dev ? dev.split(" [usb]")[0] : T("noDevice");
-  chip.classList.toggle("linked", !!dev);
-  chip.title = dev ? T("deviceConnected") : T("emptyDevices");
+  chipName.textContent = d.name;
+  chip.classList.toggle("linked", d.kind === "linked");
+  chip.title = d.kind === "linked" ? T("deviceConnected") : T(d.kind === "pending" ? "checking" : "emptyDevices");
   const btn = $("btn-run");
-  btn.disabled = state.devices.length === 0 || state.view === "activity" && !!state._runBusy;
-  btn.textContent = dev ? Tf("runWith", { P: activeProject() }) : T("run");
-  btn.title = state.devices.length === 0 ? T("emptyDevices") : "";
+  btn.disabled = d.kind !== "linked" || (state.view === "activity" && !!state._runBusy);
+  btn.textContent = d.kind === "linked" ? Tf("runWith", { P: activeProject() }) : T("run");
+  btn.title = d.kind === "linked" ? "" : chip.title;
 }
 
 function renderRail() {
+  // los rótulos del rail solo cambian al cambiar de idioma (evita reflow continuo)
+  if (renderRail.lastLang !== lang) {
+    document.querySelectorAll(".rail-item").forEach((b) => {
+      b.querySelector("span").textContent = T(b.dataset.view);
+    });
+    renderRail.lastLang = lang;
+  }
   document.querySelectorAll(".rail-item").forEach((b) => {
-    b.querySelector("span").textContent = T(b.dataset.view);
     b.classList.toggle("active", b.dataset.view === state.view);
     b.setAttribute("aria-current", b.dataset.view === state.view ? "page" : "false");
   });
@@ -280,6 +291,19 @@ function renderRail() {
 const activeProject = () => localStorage.getItem("winios.project") || state.projects[0] || "";
 
 const PHASE_ORDER = ["unpacking", "preparing", "provisioning", "signing", "packaging", "connecting", "installing", "verifying", "launching"];
+
+/* veredicto único del estado del iPhone: chip, Inicio y siguiente paso
+   comparten esta lógica para no contradecirse nunca */
+function deviceVerdict() {
+  if (state.devices.length) {
+    return { kind: "linked", name: state.devices[0].split(" [usb]")[0] };
+  }
+  const phoneCheck = checkById("phone");
+  if (state.booting || state.scanning || phoneCheck?.state === "ok") {
+    return { kind: "pending", name: T("checking") };
+  }
+  return { kind: "none", name: T("noDevice") };
+}
 
 /* ---------- siguiente paso real ---------- */
 function nextAction() {
@@ -291,7 +315,11 @@ function nextAction() {
       html: `${T("fixHint")}${list ? `<span class="fix-inline">${list}</span>` : ""}`,
       run: "fix" };
   }
-  if (!state.devices.length) {
+  const d = deviceVerdict();
+  if (d.kind === "pending") {
+    return { hint: T("checkingHint"), icon: G.pending, html: "", run: "" };
+  }
+  if (d.kind === "none") {
     return { hint: T("nextScanHint"), icon: G.pending,
       html: T("nextScan"), run: "devices" };
   }
@@ -315,19 +343,23 @@ function vCheckRow(c) {
 }
 
 function vHome() {
-  const allOk = !setupNeeded() && state.checks.length > 0;
-  const next = nextAction();
+  const allOk = !setupNeeded() && state.checks.length > 0 && !state.booting;
+  const next = state.booting ? null : nextAction();
   const idea = esc(localStorage.getItem("winios.idea") || "");
+  const prepRows = state.booting
+    ? `<div class="rowline">${G.pending}<div class="gbody"><div class="name">${T("checking")}</div></div></div>`
+    : (state.checks.map(vCheckRow).join("") || `<p class="detail">${esc(checkById("engine")?.detail || T("envErrorTitle"))}</p>`);
+  const dv = state.booting ? { kind: "pending", name: T("checking") } : deviceVerdict();
   return `<div class="vhead">
     <h1>${T("title")}</h1>
     <p class="sub">${T("subtitle")}</p>
   </div>
   <div class="cols">
     <div class="col">
-      ${next.run ? `<div class="next-step" data-action="${next.run}">
+      ${next ? `<div class="next-step" data-action="${next.run}">
         ${next.icon}
         <div><div class="ns-head">${T("nextStep")}</div><div class="ns-hint">${next.hint}</div></div>
-        <button class="primary big" id="btn-next">${next.html}</button>
+        ${next.run ? `<button class="primary big" id="btn-next">${next.html}</button>` : ""}
       </div>` : ""}
       <div class="card">
         <h3>${T("whatCreate")}</h3>
@@ -344,11 +376,11 @@ function vHome() {
       <div class="card">
         <h3>${T("prep")}</h3>
         <div class="prep-device">
-          <span class="dev-dot ${state.devices.length ? "linked" : ""}" style="flex:none"></span>
-          <div><div class="name">${state.devices.length ? esc(state.devices[0].split(" [usb]")[0]) : T("noDevice")}</div>
-          <div class="detail">${state.devices.length ? T("deviceModes") : T("emptyDevices")}</div></div>
+          <span class="dev-dot ${dv.kind === "linked" ? "linked" : ""}" style="flex:none"></span>
+          <div><div class="name">${esc(dv.name)}</div>
+          <div class="detail">${dv.kind === "linked" ? T("deviceModes") : T("emptyDevices")}</div></div>
         </div>
-        ${state.checks.map(vCheckRow).join("") || `<p class="detail">${esc(checkById("engine")?.detail || T("envErrorTitle"))}</p>`}
+        ${prepRows}
         <details class="tech"><summary>${T("detailTech")}</summary><pre>${state.checks.map((c) => `${c.id}: ${c.state} — ${esc(c.detail)}`).join("\n")}</pre></details>
       </div>
     </div>
@@ -695,7 +727,9 @@ async function doSdkInstall(path) {
 
 async function scanDevices() {
   if (state.scanning) return;
-  state.scanning = true; render();
+  state.scanning = true;
+  if (state.view === "devices") render();
+  else renderTopbar();
   try {
     const d = await invoke("device_list");
     if (JSON.stringify(d) !== JSON.stringify(state.devices)) {
@@ -771,8 +805,8 @@ listen("deploy://done", (ev) => {
   if (code === "0") state.status = state.phases.verifying === 2 ? "installed" : "build";
   else state.status = "fail";
   if (state.view === "activity") render();
-  // refrescar dispositivo/comprobaciones tras una instalación
-  bootstrap(true);
+  // refrescar estado del dispositivo tras una instalación
+  scanDevices();
 });
 
 /* ---------- eventos del motor: asistente ---------- */
@@ -799,7 +833,9 @@ listen("setup://done", async (ev) => {
   const code = String(ev.payload.code ?? ev.payload).trim();
   state.setup.running = false;
   state.setup.done = code === "0" ? "ok" : "fail";
-  await bootstrap();
+  state.checks = await invoke("env_status").catch(() => state.checks);
+  scanDevices();
+  if (state.view === "setup") render();
 });
 
 /* ---------- arrastrar Xcode.xip (evento del core de Tauri) ---------- */
@@ -809,38 +845,43 @@ listen("tauri://drag-drop", (ev) => {
 });
 
 /* ---------- bootstrap y sondeo ---------- */
-async function bootstrap(lazyRender) {
+async function bootstrap() {
   try {
-    const [checks, devices, projects] = await Promise.all([
+    const [checks, projects] = await Promise.all([
       invoke("env_status").catch(() => [{ id: "engine", state: "fail", detail: "WinIOS" }]),
-      invoke("device_list").catch(() => state.devices),
       invoke("projects").catch(() => state.projects),
     ]);
-    const changedEnv = JSON.stringify(checks) !== JSON.stringify(state.checks);
-    const changedProj = JSON.stringify(projects) !== JSON.stringify(state.projects);
-    const changedDev = JSON.stringify(devices) !== JSON.stringify(state.devices);
     state.checks = checks;
-    state.devices = devices;
-    state.projects = projects.length ? projects : state.projects;
-    if ($("dlg-new")?.open) return; // no pisar el diálogo
-    if (document.activeElement?.tagName === "TEXTAREA" || document.activeElement?.tagName === "INPUT") {
-      return; // usuario escribiendo: no robamos foco
-    }
-    if (!lazyRender || changedEnv || changedProj || changedDev) render();
-    else if (changedEnv) renderTopbar();
+    if (projects.length) state.projects = projects;
+    state.booting = false;
+    render();
   } catch (e) {
     state.checks = [{ id: "engine", state: "fail", detail: String(e) }];
+    state.booting = false;
     render();
   }
+  // el iPhone se comprueba aparte y sin bloquear el arranque
+  scanDevices();
   pollEnv();
 }
 
+// sondeo liviano: solo comprobaciones del entorno (los dispositivos
+// se escanean a demanda, en la vista o tras el primer arranque)
 function pollEnv() {
   if (pollEnv.timer) return;
-  pollEnv.timer = setInterval(async () => {
-    if (document.hidden || pollEnv.busy || state.view === "setup") return;
+  setInterval(async () => {
+    if (document.hidden || pollEnv.busy) return;
     pollEnv.busy = true;
-    try { await bootstrap(true); } catch { /* entorno ausente: el asistente lo gestiona */ }
+    try {
+      const checks = await invoke("env_status");
+      if (JSON.stringify(checks) !== JSON.stringify(state.checks)) {
+        state.checks = checks;
+        if ($("dlg-new")?.open) { pollEnv.busy = false; return; }
+        if (document.activeElement?.tagName === "TEXTAREA" || document.activeElement?.tagName === "INPUT") { pollEnv.busy = false; return; }
+        if (state.view === "setup") { pollEnv.busy = false; return; }
+        render();
+      }
+    } catch { /* entorno ausente: el asistente lo gestiona */ }
     pollEnv.busy = false;
   }, 4000);
 }
@@ -851,15 +892,14 @@ function setupNeeded() {
   return state.checks.some((c) => c.state === "fail" && c.id !== "engine");
 }
 
-/* arranque */
+/* arranque: primero se pinta la estructura con estado "Comprobando…",
+   luego hydrata con datos reales; nada bloquea la ventana */
 document.documentElement.lang = lang;
-bootstrap();
-// primer arranque: si falta el entorno, el asistente es la pantalla principal
-setTimeout(async () => {
-  await bootstrap();
+render();
+bootstrap().then(() => {
   const needs = state.checks.some((c) => c.state === "fail" && c.id !== "phone");
   if (needs && !localStorage.getItem("winios.setupDone")) {
     state.view = "setup"; render();
     autoRunSetup(); // instalación 100% automática al primer arranque
   }
-}, 2500);
+});

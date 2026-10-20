@@ -177,7 +177,7 @@ fi
 "#;
 
 #[tauri::command]
-fn env_status() -> Vec<Check> {
+async fn env_status() -> Vec<Check> {
     let out = run_lines(&wrap_common(&format!("{}\n{}\n", RUNNER_BLOCK, ENV_SCRIPT)));
     let Ok(lines) = out else {
         return vec![Check {
@@ -202,7 +202,7 @@ fn env_status() -> Vec<Check> {
 }
 
 #[tauri::command]
-fn device_list() -> Vec<String> {
+async fn device_list() -> Vec<String> {
     let mut out = Vec::new();
     if let Ok(lines) = run_lines(&wrap_common(
         r#""$APP" devices --usb --no-wait 2>/dev/null | while read -r L; do printf '@WINIOS:DEV:%s\n' "$L"; done"#,
@@ -220,7 +220,7 @@ fn device_list() -> Vec<String> {
 }
 
 #[tauri::command]
-fn projects() -> Vec<String> {
+async fn projects() -> Vec<String> {
     let mut out = Vec::new();
     if let Ok(lines) = run_lines(&wrap_common(
         r#"for D in "$WORK"/projects/*/; do test -d "$D" && printf '@WINIOS:PROJ:%s\n' "$(basename "$D")"; done"#,
@@ -250,7 +250,7 @@ fn valid_name(name: &str) -> bool {
 }
 
 #[tauri::command]
-fn new_project(name: String) -> Result<String, String> {
+async fn new_project(name: String) -> Result<String, String> {
     if !valid_name(&name) {
         return Err("Nombre inválido".into());
     }
