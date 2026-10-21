@@ -80,8 +80,7 @@ fn run_lines_as(user: &str, script_text: &str) -> Result<Vec<String>, String> {
     let stdout = child.stdout.take().unwrap();
     let lines: Vec<String> = BufReader::new(stdout)
         .lines()
-        .flatten()
-        .map(|l| l.trim_end_matches('\r').to_string())
+        .filter_map(|l| Some(l.ok()?.trim_end_matches('\r').to_string()))
         .collect();
     let _ = child.wait();
     Ok(lines)
@@ -92,7 +91,9 @@ fn run_lines(script_text: &str) -> Result<Vec<String>, String> {
 }
 
 fn run_script(script_text: &str) -> String {
-    run_lines(script_text).map(|ls| ls.join("\n")).unwrap_or_default()
+    run_lines(script_text)
+        .map(|ls| ls.join("\n"))
+        .unwrap_or_default()
 }
 
 fn marker(line: &str, key: &str) -> Option<String> {
@@ -308,8 +309,7 @@ if test -d "{_NAME}"; then printf '@WINIOS:DIR:%s\n' "$WORK/projects/{_NAME}"; e
     }
     Err(out
         .lines()
-        .filter(|l| !l.starts_with("@WINIOS:"))
-        .last()
+        .rfind(|l| !l.starts_with("@WINIOS:"))
         .unwrap_or("xtool no pudo crear el proyecto")
         .to_string())
 }
@@ -351,19 +351,14 @@ fn where_code() -> Option<String> {
 fn find_code_cli() -> Option<String> {
     let mut cands: Vec<String> = Vec::new();
     if let Ok(lad) = std::env::var("LOCALAPPDATA") {
-        cands.push(format!(
-            r"{}\Programs\Microsoft VS Code\bin\code.cmd",
-            lad
-        ));
+        cands.push(format!(r"{}\Programs\Microsoft VS Code\bin\code.cmd", lad));
         cands.push(format!(
             r"{}\Programs\Microsoft VS Code Insiders\bin\code-insiders.cmd",
             lad
         ));
     }
     cands.push(r"C:\Program Files\Microsoft VS Code\bin\code.cmd".into());
-    cands.push(
-        r"C:\Program Files\Microsoft VS Code Insiders\bin\code-insiders.cmd".into(),
-    );
+    cands.push(r"C:\Program Files\Microsoft VS Code Insiders\bin\code-insiders.cmd".into());
     if let Some(p) = cands.iter().find(|c| std::path::Path::new(c).is_file()) {
         return Some(p.clone());
     }
@@ -408,10 +403,7 @@ fn flush_prompt(cur: &mut Vec<u8>, emit: &mut dyn FnMut(String)) {
     }
 }
 
-fn pump_frames(
-    mut stdout: impl std::io::Read + Send + 'static,
-    mut emit: impl FnMut(String),
-) {
+fn pump_frames(mut stdout: impl std::io::Read + Send + 'static, mut emit: impl FnMut(String)) {
     use std::sync::mpsc;
     use std::time::Duration;
     // lector dedicado: read() bloqueante no ofrece timeout, así que los
@@ -491,7 +483,10 @@ fn stream_child(app: AppHandle, prefix: &str, mut child: Child, script_text: &st
                 stop = true;
                 return;
             }
-            let _ = handle.emit(&format!("{prefix}://line"), serde_json::json!({ "line": txt }));
+            let _ = handle.emit(
+                &format!("{prefix}://line"),
+                serde_json::json!({ "line": txt }),
+            );
         });
         let _ = child.wait();
         // cierre natural (sin marcador DONE): la UI también recibe fin de flujo
@@ -535,7 +530,7 @@ fn auth_login(app: AppHandle, username: String, password: String) -> Result<Stri
             let _ = h.emit("auth://line", serde_json::json!({ "line": txt }));
         });
         drop(AUTH_SESS.lock().unwrap().take()); // cierra stdin; PTY termina
-        // resultado por evidencia: 'xtool auth status' tras el intento
+                                                // resultado por evidencia: 'xtool auth status' tras el intento
         let out = run_lines(&wrap_common(
             r#""$APP" auth status 2>&1 | while read -r L; do printf '@WINIOS:AUTHSTATUS:%s\n' "$L"; done"#,
         ));
@@ -693,7 +688,10 @@ fn ensure_wsl_core(app: &AppHandle) -> WslCore {
         return WslCore::Ready;
     }
     // camino 1: wsl --install (se autoeleva con UAC en builds actuales)
-    emit_line(app, "activando la plataforma WSL (Windows puede pedir permiso)…");
+    emit_line(
+        app,
+        "activando la plataforma WSL (Windows puede pedir permiso)…",
+    );
     match hide_console(Command::new("wsl.exe"))
         .args(["--install", "--no-distribution", "--web-download"])
         .output()
@@ -702,7 +700,10 @@ fn ensure_wsl_core(app: &AppHandle) -> WslCore {
         _ => {}
     }
     // camino 2: respaldo elevado oculto (dism + MSI oficial de GitHub)
-    emit_line(app, "configurando la plataforma WSL con permisos de Windows (acepta el UAC)…");
+    emit_line(
+        app,
+        "configurando la plataforma WSL con permisos de Windows (acepta el UAC)…",
+    );
     let base = match std::env::var("LOCALAPPDATA")
         .map(|d| format!(r"{d}\WiniOS"))
         .map_err(|_| "no se resolvió LOCALAPPDATA".to_string())
@@ -738,15 +739,29 @@ fn ensure_wsl_core(app: &AppHandle) -> WslCore {
     if verdict.contains("WINIOS:WSL-OK") {
         WslCore::Ready
     } else if verdict.contains("WINIOS:WSL-REBOOT") {
-        emit_line(app, "Windows activó WSL — hay que reiniciar para terminarlo.");
+        emit_line(
+            app,
+            "Windows activó WSL — hay que reiniciar para terminarlo.",
+        );
         WslCore::Reboot
     } else if verdict.contains("WINIOS:WSL-MISSING") {
-        WslCore::Fail("wsl.exe no existe en este Windows; actualiza Windows e inténtalo de nuevo".into())
+        WslCore::Fail(
+            "wsl.exe no existe en este Windows; actualiza Windows e inténtalo de nuevo".into(),
+        )
     } else {
-        let tail = verdict.lines().rev().take(4).collect::<Vec<_>>().join(" · ");
+        let tail = verdict
+            .lines()
+            .rev()
+            .take(4)
+            .collect::<Vec<_>>()
+            .join(" · ");
         WslCore::Fail(format!(
             "WSL no se pudo activar; evidencia: {}",
-            if tail.is_empty() { "sin registro (¿se rechazó el UAC?)" } else { &tail }
+            if tail.is_empty() {
+                "sin registro (¿se rechazó el UAC?)"
+            } else {
+                &tail
+            }
         ))
     }
 }
@@ -769,8 +784,13 @@ fn ensure_distro(app: &AppHandle) -> Result<(), String> {
         .map(|o| o.status.success())
         .unwrap_or(false);
     if exists {
-        emit_line(app, "La distro aislada WinIOS estaba incompleta — reinstalando…");
-        let _ = hide_console(Command::new("wsl.exe")).args(["--unregister", DISTRO]).output();
+        emit_line(
+            app,
+            "La distro aislada WinIOS estaba incompleta — reinstalando…",
+        );
+        let _ = hide_console(Command::new("wsl.exe"))
+            .args(["--unregister", DISTRO])
+            .output();
     }
     // el núcleo WSL se garantiza con caminos progresivos (wsl --install →
     // dism + MSI elevado); sin reinicio no se continúa
@@ -794,7 +814,10 @@ fn ensure_distro(app: &AppHandle) -> Result<(), String> {
     std::fs::create_dir_all(&distro_dir).map_err(|e| e.to_string())?;
 
     if !std::path::Path::new(&rootfs).exists() {
-        emit_line(app, "descargando Ubuntu 24.04 aislado (~340 MB, una sola vez)…");
+        emit_line(
+            app,
+            "descargando Ubuntu 24.04 aislado (~340 MB, una sola vez)…",
+        );
         emit_step(app, "download", "running");
         let mut dl = hide_console(Command::new("curl.exe"))
             .args(["-fL", "--retry", "3", ROOTFS_URL, "-o", &rootfs])
@@ -814,7 +837,10 @@ fn ensure_distro(app: &AppHandle) -> Result<(), String> {
                 if done_flag.load(std::sync::atomic::Ordering::Relaxed) {
                     break;
                 }
-                let mb = std::fs::metadata(&rootfs_watch).map(|m| m.len()).unwrap_or(0) / 1_000_000;
+                let mb = std::fs::metadata(&rootfs_watch)
+                    .map(|m| m.len())
+                    .unwrap_or(0)
+                    / 1_000_000;
                 if mb == last {
                     stalls += 1;
                     if stalls >= 100 {
@@ -865,7 +891,9 @@ printf '@WINIOS:PROVISIONED\n'
         return Err("no se pudo configurar el usuario de la distro aislada".into());
     }
     // el wsl.conf (usuario por defecto) se aplica tras reiniciar la distro
-    let _ = hide_console(Command::new("wsl.exe")).args(["--terminate", DISTRO]).output();
+    let _ = hide_console(Command::new("wsl.exe"))
+        .args(["--terminate", DISTRO])
+        .output();
     std::thread::sleep(Duration::from_secs(2));
     let verify = hide_console(Command::new("wsl.exe"))
         .args(["-d", DISTRO, "-u", WUSER, "--", "whoami"])
@@ -1089,14 +1117,12 @@ fn setup_run(app: AppHandle) -> Result<String, String> {
             Ok(()) => {
                 emit_step(&h, "distro", "ok");
                 let script_text = wrap_common(
-                &(
-                    SETUP_SCRIPT
+                    &(SETUP_SCRIPT
                         .replace("__SWIFT_VER__", SWIFT_VERSION)
                         // escritorio amable para el proyecto de ejemplo también
                         + "\n"
-                        + &project_desktop_shell("WinizHello")
-                ),
-            );
+                        + &project_desktop_shell("WinizHello")),
+                );
                 match spawn_wsl(WUSER) {
                     Ok(child) => stream_child(h, "setup", child, &script_text),
                     Err(_) => {
@@ -1177,10 +1203,66 @@ fn setup_distro(app: AppHandle) -> Result<String, String> {
 fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
-            env_status, device_list, projects, new_project, run_project,
-            setup_run, sdk_install, setup_distro,
-            auth_login, auth_feed, auth_close, open_vscode
+            env_status,
+            device_list,
+            projects,
+            new_project,
+            run_project,
+            setup_run,
+            sdk_install,
+            setup_distro,
+            auth_login,
+            auth_feed,
+            auth_close,
+            open_vscode
         ])
         .run(tauri::generate_context!())
         .expect("error al correr WiniOS Studio");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn nombres_validos_e_invalidos() {
+        assert!(valid_name("MiApp"));
+        assert!(valid_name("my-app_2"));
+        assert!(!valid_name("9app")); // no empieza por letra
+        assert!(!valid_name("app name")); // espacio
+        assert!(!valid_name("app;rm -rf /")); // inyección de shell
+        assert!(!valid_name(""));
+        assert!(!valid_name("café")); // no ASCII
+    }
+
+    #[test]
+    fn rutas_windows_a_wsl() {
+        assert_eq!(
+            win_path_to_wsl(r"C:\Users\User\Xcode_27.0.0.xip"),
+            "/mnt/c/Users/User/Xcode_27.0.0.xip"
+        );
+        assert_eq!(
+            win_path_to_wsl(r#""C:\Users\el User\apps\Xcode.xip""#),
+            "/mnt/c/Users/el User/apps/Xcode.xip"
+        );
+        assert_eq!(
+            win_path_to_wsl("C:/descargas/Xcode.xip"),
+            "/mnt/c/descargas/Xcode.xip"
+        );
+        assert_eq!(
+            win_path_to_wsl("/home/winios/Xcode.xip"),
+            "/home/winios/Xcode.xip"
+        );
+    }
+
+    #[test]
+    fn scan_marker_de_eventos() {
+        assert_eq!(
+            marker("@WINIOS:STEP:deps:ok", "STEP"),
+            Some("deps:ok".into())
+        );
+        assert_eq!(marker("@WINIOS:EXIT:0", "EXIT"), Some("0".into()));
+        assert_eq!(marker("salida normal", "STEP"), None);
+        assert_eq!(marker("@WINIOS:OTRA:x", "STEP"), None);
+    }
 }
