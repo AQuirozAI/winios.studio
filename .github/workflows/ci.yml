@@ -8,13 +8,23 @@
 # Artifacts: el instalador queda como artifact del run para probar sin
 # crear release.
 
-name: CI · Windows build
+name: CI
+
+# mínimo privilegio: los jobs solo necesitan leer el repo y subir artifact
+permissions:
+  contents: read
+
+# Solo cuando cambia algo que afecta a la app: docs/ y site/ no deben
+# gastar ~2min de runner Windows por empujón (el 70% de los runs de los
+# últimos días eran commits de docs/site).
 
 on:
   push:
     branches: [main]
+    paths: ['app/**', 'scripts/**', '.github/workflows/ci.yml']
   pull_request:
     branches: [main]
+    paths: ['app/**', '.github/workflows/ci.yml']
   workflow_dispatch:
 
 concurrency:
@@ -22,6 +32,39 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Gate de calidad en Linux (rápido y barato): fmt, clippy estricto y los
+  # tests unitarios del motor (main.rs #[cfg(test)], puros — sin I/O de
+  # Windows). Corre en paralelo al build: no alarga el critical path.
+  check:
+    name: Linux · fmt + clippy + test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Rust stable (+ clippy/rustfmt)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      # deps de sistema de Tauri para compilar en Linux (webkit2gtk)
+      - name: Sistema (webkit2gtk y amigos)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libssl-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: app/src-tauri -> target
+          cache-on-failure: true
+
+      - name: fmt + clippy + test
+        working-directory: app/src-tauri
+        run: |
+          cargo fmt --check
+          cargo clippy --all-targets -- -D warnings
+          cargo test
+
   build:
     name: Windows · release + NSIS
     runs-on: windows-latest
@@ -35,6 +78,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: app/src-tauri -> target
+          cache-on-failure: true
 
       # tauri-cli prebuilt (mismo patrón del build local: scripts/build-windows.ps1)
       - name: tauri-cli prebuilt
@@ -65,3 +109,4 @@ jobs:
         with:
           name: winios-studio-setup
           path: ${{ steps.setup.outputs.installer }}
+          retention-days: 14

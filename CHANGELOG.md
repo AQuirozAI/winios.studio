@@ -4,6 +4,13 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 
 ## [Unreleased]
 
+### Corregido
+- **Bug real de producto**: `win_path_to_wsl` generaba `/mnt/cUsers/...` (perdía la `/` tras el drive) — cualquier ruta Windows→WSL estaba mal convertida. Lo destapó el nuevo job `check` de CI al correr los tests que existían pero nunca habían corrido.
+
+### CI (profesionalizado y más rápido)
+- `ci.yml` solo corre si cambia algo de `app/**` / `scripts/**` / el propio workflow (antes: ~70% de los runs eran commits de docs/site vendiendo ~2min de runner Windows cada uno).
+- Job `check` en Ubuntu (`fmt --check`, `clippy -D warnings`, `cargo test`) en paralelo al build — el gate de calidad existe de verdad; `cache-on-failure` en todos los jobs; permisos de mínimo privilegio; artifact con retención 14 días.
+
 ### En progreso (v0.3)
 - Codex integrado (App Server JSON-RPC; handshake comprobado en este equipo): pedir cambios con IA, revisión de diffs y *Build & Fix* con diagnóstico real.
 - Idea → draft de app guardado en la UI (la conversación consume el draft al conectar Codex).

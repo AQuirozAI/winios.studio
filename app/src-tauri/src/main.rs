@@ -45,13 +45,17 @@ export PATH="/opt/swift/usr/bin:$HOME/.local/bin:$PATH"
 
 // sin parpadeo de consola: TODO proceso de Windows que lanza el motor va
 // oculto — la app es solo la UI, nunca una terminal
-fn hide_console(mut c: Command) -> Command {
+fn hide_console(c: Command) -> Command {
+    #[cfg(not(windows))]
+    return c;
+
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
+        let mut c = c;
         c.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+        c
     }
-    c
 }
 
 fn spawn_wsl(user: &str) -> Result<Child, String> {
@@ -1149,8 +1153,9 @@ fn win_path_to_wsl(p: &str) -> String {
     let mut chars = fwd.chars();
     let drive = chars.next().unwrap_or('C').to_ascii_lowercase();
     let rest: String = chars.by_ref().collect();
+    // tras el drive viene ":..." — queda "/..." que es justo lo que
+    // /mnt/{drive}{rest} necesita
     let rest = rest.strip_prefix(':').unwrap_or(rest.as_str()).to_string();
-    let rest = rest.strip_prefix('/').unwrap_or(rest.as_str()).to_string();
     format!("/mnt/{}{}", drive, rest)
 }
 

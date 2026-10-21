@@ -37,6 +37,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: app/src-tauri -> target
+          cache-on-failure: true
 
       - name: tauri-cli prebuilt
         shell: pwsh
